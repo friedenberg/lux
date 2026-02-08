@@ -69,10 +69,11 @@ clean:
     rm -f lux
     rm -rf result
 
-# Update go dependencies
+# Update go dependencies and regenerate gomod2nix.toml
 deps:
-    go mod tidy
+    nix develop --command go mod tidy
+    nix develop --command gomod2nix
 
-# Generate vendored dependencies for nix
-vendor:
-    go mod vendor
+# Regenerate gomod2nix.toml (run after changing go.mod)
+gomod2nix:
+    nix develop --command gomod2nix
