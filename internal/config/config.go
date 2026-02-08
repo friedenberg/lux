@@ -52,7 +52,7 @@ func runtimeDir() string {
 }
 
 func ConfigPath() string {
-	return filepath.Join(configDir(), "config.toml")
+	return filepath.Join(configDir(), "lsps.toml")
 }
 
 func DataDir() string {

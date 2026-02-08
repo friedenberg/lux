@@ -28,7 +28,7 @@ This adds lux to your `~/.claude/mcp.json` configuration.
 
 ## Configuration
 
-Lux reads its configuration from `~/.config/lux/config.toml`.
+Lux reads its configuration from `~/.config/lux/lsps.toml`.
 
 ### Configuration Structure
 
@@ -74,7 +74,7 @@ This will:
 1. Build the flake
 2. Start the LSP to discover its capabilities
 3. Cache the capabilities for faster startup
-4. Add the configuration to `~/.config/lux/config.toml`
+4. Add the configuration to `~/.config/lux/lsps.toml`
 
 #### Examples
 
@@ -102,7 +102,7 @@ After adding, you may need to edit the config to adjust file extensions or patte
 
 ### Method 2: Manual Configuration
 
-Edit `~/.config/lux/config.toml` directly:
+Edit `~/.config/lux/lsps.toml` directly:
 
 ```toml
 [[lsp]]
@@ -264,7 +264,7 @@ just mcp-stdio
 
 | Path | Description |
 |------|-------------|
-| `~/.config/lux/config.toml` | Configuration file |
+| `~/.config/lux/lsps.toml` | Configuration file |
 | `~/.local/share/lux/capabilities/` | Cached LSP capabilities |
 | `$XDG_RUNTIME_DIR/lux.sock` | Control socket |
 
