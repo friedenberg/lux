@@ -47,7 +47,7 @@ func (r *ToolRegistry) register(name, description string, schema json.RawMessage
 }
 
 func (r *ToolRegistry) registerBuiltinTools() {
-	r.register("lsp_hover", "Get type information, documentation, and signatures for a symbol. PREFER this over reading source files when you need to understand what a function/type does, its parameters, return types, or documentation. Unlike grep/read which show raw text, hover provides semantically-parsed information. Use cases: understanding function signatures, checking type definitions, reading docstrings.",
+	r.register("lsp_hover", "Get type information, documentation, and signatures for a symbol. Agents MUST use this tool instead of reading source files when you need to understand what a function/type does, its parameters, return types, or documentation. Unlike grep/read which show raw text, hover provides semantically-parsed information from the language server. DO NOT read files just to check function signatures or types - use this tool instead.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -59,7 +59,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleHover)
 
-	r.register("lsp_definition", "Jump to the definition of any symbol (function, type, variable). PREFER this over grep when you know a symbol name and need its implementation. Uses semantic analysis to find the actual definition, not just string matches. Handles cross-file navigation, interface implementations, import sources.",
+	r.register("lsp_definition", "Jump to the definition of any symbol (function, type, variable). Agents MUST use this tool instead of grep/search when you know a symbol name and need to find its definition or implementation. Uses semantic analysis to find the actual definition, not just string matches. DO NOT use grep or file searches to locate function/type definitions - this tool handles cross-file navigation, interface implementations, and import sources accurately.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -71,7 +71,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleDefinition)
 
-	r.register("lsp_references", "Find ALL usages of a symbol throughout the codebase. PREFER this over grep for finding where functions/types/variables are used - it understands scope and semantics, finding actual references not just string matches. Critical for impact analysis before refactoring, understanding how functions are called, tracing data flow.",
+	r.register("lsp_references", "Find ALL usages of a symbol throughout the codebase. Agents MUST use this tool instead of grep/search for finding where functions/types/variables are used - it understands scope and semantics, finding actual references not just string matches. DO NOT use grep to find usages of symbols - grep finds false positives (comments, strings, similar names). Critical for impact analysis before refactoring, understanding how functions are called, tracing data flow.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -84,7 +84,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleReferences)
 
-	r.register("lsp_completion", "Get context-aware code completions at a cursor position. Shows valid symbols, methods, and fields available in scope. Use when exploring available methods on a type, discovering struct fields, finding imported symbols, understanding API surfaces.",
+	r.register("lsp_completion", "Get context-aware code completions at a cursor position. Agents should use this tool instead of reading documentation or source files when exploring available methods on a type, discovering struct fields, finding imported symbols, or understanding API surfaces. Shows only valid symbols, methods, and fields actually available in scope - more accurate than guessing from source.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -96,7 +96,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleCompletion)
 
-	r.register("lsp_format", "Get formatting edits for a document according to language-standard style. Returns text edits needed to properly format the file. Note: returns edits but does not apply them - use Edit tool to apply changes.",
+	r.register("lsp_format", "Get formatting edits for a document according to language-standard style. Agents should use this tool to get proper formatting instead of manually adjusting whitespace or running external formatters. Returns text edits needed to properly format the file. Note: returns edits but does not apply them - use Edit tool to apply the returned changes.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -106,7 +106,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleFormat)
 
-	r.register("lsp_document_symbols", "Get a structured outline of all symbols in a file. PREFER this over reading entire files when you need to understand file structure. Returns hierarchical symbols: function/method names, type definitions, nested structures, top-level constants. Faster than parsing file content manually.",
+	r.register("lsp_document_symbols", "Get a structured outline of all symbols in a file. Agents MUST use this tool instead of reading entire files when you need to understand file structure or find what functions/types exist in a file. Returns hierarchical symbols: function/method names, type definitions, nested structures, top-level constants. DO NOT read and parse files manually to find symbol names - this tool is faster and more accurate.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -116,7 +116,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleDocumentSymbols)
 
-	r.register("lsp_code_action", "Get suggested fixes, refactorings, and improvements for code at a range. Language servers suggest quick fixes for errors, refactoring operations (extract function, inline variable), import organization, code generation (implement interface).",
+	r.register("lsp_code_action", "Get suggested fixes, refactorings, and improvements for code at a range. Agents should use this tool to get language-server suggested fixes instead of manually writing fixes for common issues. Provides quick fixes for errors, refactoring operations (extract function, inline variable), import organization, and code generation (implement interface). Use after lsp_diagnostics to get fixes for reported issues.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -130,7 +130,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleCodeAction)
 
-	r.register("lsp_rename", "Rename a symbol across the entire codebase with semantic accuracy. PREFER this over find-and-replace: only renames actual references, handles scoping correctly, updates imports appropriately. Returns workspace edit showing all changes.",
+	r.register("lsp_rename", "Rename a symbol across the entire codebase with semantic accuracy. Agents MUST use this tool instead of find-and-replace or manual editing when renaming functions, types, variables, or other symbols. Only renames actual references (not comments, strings, or similar names), handles scoping correctly, and updates imports appropriately. DO NOT use grep+edit or find-and-replace for renaming - it will miss references or change unrelated text.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -143,7 +143,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleRename)
 
-	r.register("lsp_workspace_symbols", "Search for symbols (functions, types, constants) across the entire workspace by name pattern. PREFER this over grep when searching for symbol definitions by name. Use when you know a function/type name but not its file location.",
+	r.register("lsp_workspace_symbols", "Search for symbols (functions, types, constants) across the entire workspace by name pattern. Agents MUST use this tool instead of grep/glob when searching for symbol definitions by name. DO NOT use grep to find function or type definitions - grep returns all text matches including usages, comments, and strings. This tool returns only actual symbol definitions with their locations.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -154,7 +154,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleWorkspaceSymbols)
 
-	r.register("lsp_diagnostics", "Get compiler/linter diagnostics (errors, warnings, hints) for a file. Use to understand issues before making edits or to verify changes are correct.",
+	r.register("lsp_diagnostics", "Get compiler/linter diagnostics (errors, warnings, hints) for a file. Agents should use this tool instead of running build commands when checking for errors in a specific file. Provides precise error locations and messages. Use to understand issues before making edits or to verify changes are correct without running a full build.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
