@@ -21,6 +21,8 @@ type Server struct {
 	router    *server.Router
 	bridge    *Bridge
 	tools     *ToolRegistry
+	resources *ResourceRegistry
+	prompts   *PromptRegistry
 	done      chan struct{}
 	wg        sync.WaitGroup
 }
@@ -47,6 +49,8 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 
 	s.bridge = NewBridge(s.pool, s.router)
 	s.tools = NewToolRegistry(s.bridge)
+	s.resources = NewResourceRegistry(s.pool, cfg)
+	s.prompts = NewPromptRegistry()
 	s.handler = NewHandler(s)
 	return s, nil
 }

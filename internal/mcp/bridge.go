@@ -274,6 +274,52 @@ func (b *Bridge) Rename(ctx context.Context, uri lsp.DocumentURI, line, characte
 	}, nil
 }
 
+func (b *Bridge) WorkspaceSymbols(ctx context.Context, uri lsp.DocumentURI, query string) (*ToolCallResult, error) {
+	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
+		return inst.Call(ctx, lsp.MethodWorkspaceSymbol, map[string]any{
+			"query": query,
+		})
+	})
+	if err != nil {
+		return ErrorResult(err.Error()), nil
+	}
+
+	symbols := parseWorkspaceSymbols(result)
+	if len(symbols) == 0 {
+		return &ToolCallResult{
+			Content: []ContentBlock{TextContent("No symbols found matching: " + query)},
+		}, nil
+	}
+
+	text := formatWorkspaceSymbols(symbols)
+	return &ToolCallResult{
+		Content: []ContentBlock{TextContent(text)},
+	}, nil
+}
+
+func (b *Bridge) Diagnostics(ctx context.Context, uri lsp.DocumentURI) (*ToolCallResult, error) {
+	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
+		return inst.Call(ctx, lsp.MethodTextDocumentDiagnostic, map[string]any{
+			"textDocument": lsp.TextDocumentIdentifier{URI: uri},
+		})
+	})
+	if err != nil {
+		return ErrorResult(err.Error()), nil
+	}
+
+	diagnostics := parseDiagnostics(result)
+	if len(diagnostics) == 0 {
+		return &ToolCallResult{
+			Content: []ContentBlock{TextContent("No diagnostics (errors, warnings) found")},
+		}, nil
+	}
+
+	text := formatDiagnostics(diagnostics, uri)
+	return &ToolCallResult{
+		Content: []ContentBlock{TextContent(text)},
+	}, nil
+}
+
 func (b *Bridge) readFile(uri lsp.DocumentURI) (string, error) {
 	path := uri.Path()
 	if path == "" {
@@ -615,4 +661,105 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+type WorkspaceSymbol struct {
+	Name          string       `json:"name"`
+	Kind          int          `json:"kind"`
+	Location      lsp.Location `json:"location"`
+	ContainerName string       `json:"containerName,omitempty"`
+}
+
+func parseWorkspaceSymbols(raw json.RawMessage) []WorkspaceSymbol {
+	if raw == nil || string(raw) == "null" {
+		return nil
+	}
+
+	var symbols []WorkspaceSymbol
+	if err := json.Unmarshal(raw, &symbols); err == nil {
+		return symbols
+	}
+
+	return nil
+}
+
+func formatWorkspaceSymbols(symbols []WorkspaceSymbol) string {
+	var sb strings.Builder
+	for i, sym := range symbols {
+		if i >= 50 {
+			sb.WriteString(fmt.Sprintf("\n... and %d more", len(symbols)-50))
+			break
+		}
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(fmt.Sprintf("%s %s", symbolKindName(sym.Kind), sym.Name))
+		if sym.ContainerName != "" {
+			sb.WriteString(fmt.Sprintf(" (%s)", sym.ContainerName))
+		}
+		sb.WriteString(fmt.Sprintf(" - %s:%d",
+			sym.Location.URI.Path(),
+			sym.Location.Range.Start.Line+1))
+	}
+	return sb.String()
+}
+
+type DiagnosticItem struct {
+	Range    lsp.Range `json:"range"`
+	Severity int       `json:"severity,omitempty"`
+	Source   string    `json:"source,omitempty"`
+	Message  string    `json:"message"`
+}
+
+func parseDiagnostics(raw json.RawMessage) []DiagnosticItem {
+	if raw == nil || string(raw) == "null" {
+		return nil
+	}
+
+	// Try full diagnostic response format
+	var fullResp struct {
+		Kind  string           `json:"kind"`
+		Items []DiagnosticItem `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &fullResp); err == nil && len(fullResp.Items) > 0 {
+		return fullResp.Items
+	}
+
+	// Try direct array of diagnostics
+	var items []DiagnosticItem
+	if err := json.Unmarshal(raw, &items); err == nil {
+		return items
+	}
+
+	return nil
+}
+
+func formatDiagnostics(diags []DiagnosticItem, uri lsp.DocumentURI) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("%d diagnostic(s) in %s:\n", len(diags), uri.Path()))
+	for i, d := range diags {
+		if i >= 30 {
+			sb.WriteString(fmt.Sprintf("\n... and %d more", len(diags)-30))
+			break
+		}
+		severity := "info"
+		switch d.Severity {
+		case 1:
+			severity = "error"
+		case 2:
+			severity = "warning"
+		case 3:
+			severity = "info"
+		case 4:
+			severity = "hint"
+		}
+		sb.WriteString(fmt.Sprintf("\n[%s] Line %d: %s",
+			severity,
+			d.Range.Start.Line+1,
+			d.Message))
+		if d.Source != "" {
+			sb.WriteString(fmt.Sprintf(" (%s)", d.Source))
+		}
+	}
+	return sb.String()
 }

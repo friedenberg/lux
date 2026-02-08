@@ -71,6 +71,8 @@ func TestMCPToolsList(t *testing.T) {
 		"lsp_document_symbols",
 		"lsp_code_action",
 		"lsp_rename",
+		"lsp_workspace_symbols",
+		"lsp_diagnostics",
 	}
 
 	if len(result.Tools) != len(expectedTools) {

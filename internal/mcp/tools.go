@@ -47,7 +47,7 @@ func (r *ToolRegistry) register(name, description string, schema json.RawMessage
 }
 
 func (r *ToolRegistry) registerBuiltinTools() {
-	r.register("lsp_hover", "Get hover information (type info, documentation) at a position in a file",
+	r.register("lsp_hover", "Get type information, documentation, and signatures for a symbol. PREFER this over reading source files when you need to understand what a function/type does, its parameters, return types, or documentation. Unlike grep/read which show raw text, hover provides semantically-parsed information. Use cases: understanding function signatures, checking type definitions, reading docstrings.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -59,7 +59,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleHover)
 
-	r.register("lsp_definition", "Go to definition of a symbol at a position",
+	r.register("lsp_definition", "Jump to the definition of any symbol (function, type, variable). PREFER this over grep when you know a symbol name and need its implementation. Uses semantic analysis to find the actual definition, not just string matches. Handles cross-file navigation, interface implementations, import sources.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -71,7 +71,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleDefinition)
 
-	r.register("lsp_references", "Find all references to a symbol at a position",
+	r.register("lsp_references", "Find ALL usages of a symbol throughout the codebase. PREFER this over grep for finding where functions/types/variables are used - it understands scope and semantics, finding actual references not just string matches. Critical for impact analysis before refactoring, understanding how functions are called, tracing data flow.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -84,7 +84,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleReferences)
 
-	r.register("lsp_completion", "Get code completions at a position",
+	r.register("lsp_completion", "Get context-aware code completions at a cursor position. Shows valid symbols, methods, and fields available in scope. Use when exploring available methods on a type, discovering struct fields, finding imported symbols, understanding API surfaces.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -96,7 +96,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleCompletion)
 
-	r.register("lsp_format", "Format a document",
+	r.register("lsp_format", "Get formatting edits for a document according to language-standard style. Returns text edits needed to properly format the file. Note: returns edits but does not apply them - use Edit tool to apply changes.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -106,7 +106,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleFormat)
 
-	r.register("lsp_document_symbols", "Get all symbols (functions, classes, variables) in a document",
+	r.register("lsp_document_symbols", "Get a structured outline of all symbols in a file. PREFER this over reading entire files when you need to understand file structure. Returns hierarchical symbols: function/method names, type definitions, nested structures, top-level constants. Faster than parsing file content manually.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -116,7 +116,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleDocumentSymbols)
 
-	r.register("lsp_code_action", "Get available code actions (quick fixes, refactorings) for a range",
+	r.register("lsp_code_action", "Get suggested fixes, refactorings, and improvements for code at a range. Language servers suggest quick fixes for errors, refactoring operations (extract function, inline variable), import organization, code generation (implement interface).",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -130,7 +130,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleCodeAction)
 
-	r.register("lsp_rename", "Rename a symbol across all files",
+	r.register("lsp_rename", "Rename a symbol across the entire codebase with semantic accuracy. PREFER this over find-and-replace: only renames actual references, handles scoping correctly, updates imports appropriately. Returns workspace edit showing all changes.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -142,6 +142,27 @@ func (r *ToolRegistry) registerBuiltinTools() {
 			"required": ["uri", "line", "character", "new_name"]
 		}`),
 		r.handleRename)
+
+	r.register("lsp_workspace_symbols", "Search for symbols (functions, types, constants) across the entire workspace by name pattern. PREFER this over grep when searching for symbol definitions by name. Use when you know a function/type name but not its file location.",
+		json.RawMessage(`{
+			"type": "object",
+			"properties": {
+				"query": {"type": "string", "description": "Symbol name pattern to search for"},
+				"uri": {"type": "string", "description": "Any file URI in the workspace (used to identify which LSP to query)"}
+			},
+			"required": ["query", "uri"]
+		}`),
+		r.handleWorkspaceSymbols)
+
+	r.register("lsp_diagnostics", "Get compiler/linter diagnostics (errors, warnings, hints) for a file. Use to understand issues before making edits or to verify changes are correct.",
+		json.RawMessage(`{
+			"type": "object",
+			"properties": {
+				"uri": {"type": "string", "description": "File URI (e.g., file:///path/to/file.go)"}
+			},
+			"required": ["uri"]
+		}`),
+		r.handleDiagnostics)
 }
 
 type positionArgs struct {
@@ -170,6 +191,15 @@ type codeActionArgs struct {
 type renameArgs struct {
 	positionArgs
 	NewName string `json:"new_name"`
+}
+
+type workspaceSymbolsArgs struct {
+	Query string `json:"query"`
+	URI   string `json:"uri"`
+}
+
+type diagnosticsArgs struct {
+	URI string `json:"uri"`
 }
 
 func (r *ToolRegistry) handleHover(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
@@ -236,4 +266,20 @@ func (r *ToolRegistry) handleRename(ctx context.Context, args json.RawMessage) (
 		return ErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
 	}
 	return r.bridge.Rename(ctx, lsp.DocumentURI(a.URI), a.Line, a.Character, a.NewName)
+}
+
+func (r *ToolRegistry) handleWorkspaceSymbols(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
+	var a workspaceSymbolsArgs
+	if err := json.Unmarshal(args, &a); err != nil {
+		return ErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
+	}
+	return r.bridge.WorkspaceSymbols(ctx, lsp.DocumentURI(a.URI), a.Query)
+}
+
+func (r *ToolRegistry) handleDiagnostics(ctx context.Context, args json.RawMessage) (*ToolCallResult, error) {
+	var a diagnosticsArgs
+	if err := json.Unmarshal(args, &a); err != nil {
+		return ErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
+	}
+	return r.bridge.Diagnostics(ctx, lsp.DocumentURI(a.URI))
 }

@@ -56,7 +56,9 @@ func (h *Handler) handleInitialize(ctx context.Context, msg *jsonrpc.Message) (*
 	result := InitializeResult{
 		ProtocolVersion: ProtocolVersion,
 		Capabilities: ServerCapabilities{
-			Tools: &ToolsCapability{},
+			Tools:     &ToolsCapability{},
+			Resources: &ResourcesCapability{},
+			Prompts:   &PromptsCapability{},
 		},
 		ServerInfo: Implementation{
 			Name:    "lux",
@@ -93,7 +95,7 @@ func (h *Handler) handleToolsCall(ctx context.Context, msg *jsonrpc.Message) (*j
 
 func (h *Handler) handleResourcesList(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
 	result := ResourcesListResult{
-		Resources: []Resource{},
+		Resources: h.server.resources.List(),
 	}
 	return jsonrpc.NewResponse(*msg.ID, result)
 }
@@ -104,13 +106,16 @@ func (h *Handler) handleResourcesRead(ctx context.Context, msg *jsonrpc.Message)
 		return jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InvalidParams, "invalid params", nil)
 	}
 
-	// TODO: implement resource reading
-	return jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InvalidParams, "resource not found: "+params.URI, nil)
+	result, err := h.server.resources.Read(params.URI)
+	if err != nil {
+		return jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InvalidParams, err.Error(), nil)
+	}
+	return jsonrpc.NewResponse(*msg.ID, result)
 }
 
 func (h *Handler) handlePromptsList(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
 	result := PromptsListResult{
-		Prompts: []Prompt{},
+		Prompts: h.server.prompts.List(),
 	}
 	return jsonrpc.NewResponse(*msg.ID, result)
 }
@@ -121,6 +126,9 @@ func (h *Handler) handlePromptsGet(ctx context.Context, msg *jsonrpc.Message) (*
 		return jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InvalidParams, "invalid params", nil)
 	}
 
-	// TODO: implement prompt retrieval
-	return jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InvalidParams, "prompt not found: "+params.Name, nil)
+	result, err := h.server.prompts.Get(params.Name, params.Arguments)
+	if err != nil {
+		return jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InvalidParams, err.Error(), nil)
+	}
+	return jsonrpc.NewResponse(*msg.ID, result)
 }
