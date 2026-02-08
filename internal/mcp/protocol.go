@@ -141,6 +141,17 @@ type ResourceContent struct {
 	Blob     string `json:"blob,omitempty"` // base64
 }
 
+type ResourceTemplate struct {
+	URITemplate string `json:"uriTemplate"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	MimeType    string `json:"mimeType,omitempty"`
+}
+
+type ResourceTemplatesListResult struct {
+	ResourceTemplates []ResourceTemplate `json:"resourceTemplates"`
+}
+
 // Prompts
 
 type Prompt struct {

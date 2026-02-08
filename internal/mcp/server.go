@@ -49,7 +49,7 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 
 	s.bridge = NewBridge(s.pool, s.router)
 	s.tools = NewToolRegistry(s.bridge)
-	s.resources = NewResourceRegistry(s.pool, cfg)
+	s.resources = NewResourceRegistry(s.pool, s.bridge, cfg)
 	s.prompts = NewPromptRegistry()
 	s.handler = NewHandler(s)
 	return s, nil

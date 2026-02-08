@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,18 +10,20 @@ import (
 	"strings"
 
 	"github.com/friedenberg/lux/internal/config"
+	"github.com/friedenberg/lux/internal/lsp"
 	"github.com/friedenberg/lux/internal/subprocess"
 	"github.com/friedenberg/lux/pkg/filematch"
 )
 
 type ResourceRegistry struct {
 	pool    *subprocess.Pool
+	bridge  *Bridge
 	config  *config.Config
 	cwd     string
 	matcher *filematch.MatcherSet
 }
 
-func NewResourceRegistry(pool *subprocess.Pool, cfg *config.Config) *ResourceRegistry {
+func NewResourceRegistry(pool *subprocess.Pool, bridge *Bridge, cfg *config.Config) *ResourceRegistry {
 	cwd, _ := os.Getwd()
 
 	matcher := filematch.NewMatcherSet()
@@ -30,6 +33,7 @@ func NewResourceRegistry(pool *subprocess.Pool, cfg *config.Config) *ResourceReg
 
 	return &ResourceRegistry{
 		pool:    pool,
+		bridge:  bridge,
 		config:  cfg,
 		cwd:     cwd,
 		matcher: matcher,
@@ -59,7 +63,18 @@ func (r *ResourceRegistry) List() []Resource {
 	}
 }
 
-func (r *ResourceRegistry) Read(uri string) (*ResourceReadResult, error) {
+func (r *ResourceRegistry) ListTemplates() []ResourceTemplate {
+	return []ResourceTemplate{
+		{
+			URITemplate: "lux://symbols/{uri}",
+			Name:        "File Symbols",
+			Description: "All symbols (functions, types, constants, etc.) in a file as reported by the LSP. Use file:// URI encoding for the path (e.g., lux://symbols/file:///path/to/file.go)",
+			MimeType:    "application/json",
+		},
+	}
+}
+
+func (r *ResourceRegistry) Read(ctx context.Context, uri string) (*ResourceReadResult, error) {
 	switch uri {
 	case "lux://status":
 		return r.readStatus()
@@ -68,6 +83,10 @@ func (r *ResourceRegistry) Read(uri string) (*ResourceReadResult, error) {
 	case "lux://files":
 		return r.readFiles()
 	default:
+		if strings.HasPrefix(uri, "lux://symbols/") {
+			fileURI := strings.TrimPrefix(uri, "lux://symbols/")
+			return r.readSymbols(ctx, uri, fileURI)
+		}
 		return nil, fmt.Errorf("unknown resource: %s", uri)
 	}
 }
@@ -257,6 +276,38 @@ func (r *ResourceRegistry) readFiles() (*ResourceReadResult, error) {
 		Contents: []ResourceContent{
 			{
 				URI:      "lux://files",
+				MimeType: "application/json",
+				Text:     string(data),
+			},
+		},
+	}, nil
+}
+
+type symbolsResponse struct {
+	URI     string   `json:"uri"`
+	Symbols []Symbol `json:"symbols"`
+}
+
+func (r *ResourceRegistry) readSymbols(ctx context.Context, resourceURI, fileURI string) (*ResourceReadResult, error) {
+	symbols, err := r.bridge.DocumentSymbolsRaw(ctx, lsp.DocumentURI(fileURI))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get symbols: %w", err)
+	}
+
+	resp := symbolsResponse{
+		URI:     fileURI,
+		Symbols: symbols,
+	}
+
+	data, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	return &ResourceReadResult{
+		Contents: []ResourceContent{
+			{
+				URI:      resourceURI,
 				MimeType: "application/json",
 				Text:     string(data),
 			},

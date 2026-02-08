@@ -221,6 +221,19 @@ func (b *Bridge) DocumentSymbols(ctx context.Context, uri lsp.DocumentURI) (*Too
 	}, nil
 }
 
+func (b *Bridge) DocumentSymbolsRaw(ctx context.Context, uri lsp.DocumentURI) ([]Symbol, error) {
+	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
+		return inst.Call(ctx, lsp.MethodTextDocumentDocumentSymbol, map[string]any{
+			"textDocument": lsp.TextDocumentIdentifier{URI: uri},
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return parseSymbols(result), nil
+}
+
 func (b *Bridge) CodeAction(ctx context.Context, uri lsp.DocumentURI, startLine, startChar, endLine, endChar int) (*ToolCallResult, error) {
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodTextDocumentCodeAction, map[string]any{

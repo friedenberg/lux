@@ -32,6 +32,8 @@ func (h *Handler) Handle(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Me
 		return h.handleResourcesList(ctx, msg)
 	case MethodResourcesRead:
 		return h.handleResourcesRead(ctx, msg)
+	case MethodResourcesTemplates:
+		return h.handleResourcesTemplates(ctx, msg)
 	case MethodPromptsList:
 		return h.handlePromptsList(ctx, msg)
 	case MethodPromptsGet:
@@ -106,9 +108,16 @@ func (h *Handler) handleResourcesRead(ctx context.Context, msg *jsonrpc.Message)
 		return jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InvalidParams, "invalid params", nil)
 	}
 
-	result, err := h.server.resources.Read(params.URI)
+	result, err := h.server.resources.Read(ctx, params.URI)
 	if err != nil {
 		return jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InvalidParams, err.Error(), nil)
+	}
+	return jsonrpc.NewResponse(*msg.ID, result)
+}
+
+func (h *Handler) handleResourcesTemplates(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
+	result := ResourceTemplatesListResult{
+		ResourceTemplates: h.server.resources.ListTemplates(),
 	}
 	return jsonrpc.NewResponse(*msg.ID, result)
 }
