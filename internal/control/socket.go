@@ -166,6 +166,9 @@ type Client struct {
 }
 
 func NewClient(path string) (*Client, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("no lux server running (socket %s not found)", path)
+	}
 	conn, err := net.Dial("unix", path)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to socket: %w", err)
