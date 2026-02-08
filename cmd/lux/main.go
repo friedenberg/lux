@@ -240,6 +240,16 @@ var mcpInstallClaudeCmd = &cobra.Command{
 			return fmt.Errorf("getting executable path: %w", err)
 		}
 
+		// Remove existing lux MCP server (ignore errors if it doesn't exist)
+		removeCmd := exec.CommandContext(
+			cmd.Context(),
+			"claude", "mcp", "remove", "lux",
+		)
+		removeCmd.Stdout = os.Stdout
+		removeCmd.Stderr = os.Stderr
+		removeCmd.Stdin = os.Stdin
+		_ = removeCmd.Run() // Ignore error - server may not exist yet
+
 		claudeCmd := exec.CommandContext(
 			cmd.Context(),
 			"claude", "mcp", "add", "lux",
