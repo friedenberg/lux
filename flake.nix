@@ -5,8 +5,8 @@
     nixpkgs-master.url = "github:NixOS/nixpkgs/b28c4999ed71543e71552ccfd0d7e68c581ba7e9";
     nixpkgs.url = "github:NixOS/nixpkgs/23d72dabcb3b12469f57b37170fcbc1789bd7457";
     utils.url = "https://flakehub.com/f/numtide/flake-utils/0.1.102";
-    devenv-go.url = "github:friedenberg/eng?dir=pkgs/alfa/devenv-go";
-    devenv-shell.url = "github:friedenberg/eng?dir=pkgs/alfa/devenv-shell";
+    go.url = "github:friedenberg/eng?dir=devenvs/go";
+    shell.url = "github:friedenberg/eng?dir=devenvs/shell";
   };
 
   outputs =
@@ -14,8 +14,8 @@
       self,
       nixpkgs,
       utils,
-      devenv-go,
-      devenv-shell, nixpkgs-master,
+      go,
+      shell, nixpkgs-master,
     }:
     utils.lib.eachDefaultSystem (
       system:
@@ -23,7 +23,7 @@
         pkgs = import nixpkgs {
           inherit system;
           overlays = [
-            devenv-go.overlays.default
+            go.overlays.default
           ];
         };
 
@@ -55,8 +55,8 @@
           ];
 
           inputsFrom = [
-            devenv-go.devShells.${system}.default
-            devenv-shell.devShells.${system}.default
+            go.devShells.${system}.default
+            shell.devShells.${system}.default
           ];
 
           shellHook = ''
