@@ -46,6 +46,9 @@ type LSPInstance struct {
 	Flake        string
 	Binary       string
 	Args         []string
+	Env          map[string]string
+	InitOptions  map[string]any
+	CapOverrides *CapabilityOverride
 	State        LSPState
 	Process      *Process
 	Conn         *jsonrpc.Conn
@@ -56,6 +59,11 @@ type LSPInstance struct {
 	mu     sync.RWMutex
 	ctx    context.Context
 	cancel context.CancelFunc
+}
+
+type CapabilityOverride struct {
+	Disable []string
+	Enable  []string
 }
 
 type Pool struct {
@@ -73,16 +81,19 @@ func NewPool(executor Executor, handler jsonrpc.Handler) *Pool {
 	}
 }
 
-func (p *Pool) Register(name, flake, binary string, args []string) {
+func (p *Pool) Register(name, flake, binary string, args []string, env map[string]string, initOpts map[string]any, capOverrides *CapabilityOverride) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	p.instances[name] = &LSPInstance{
-		Name:   name,
-		Flake:  flake,
-		Binary: binary,
-		Args:   args,
-		State:  LSPStateIdle,
+		Name:         name,
+		Flake:        flake,
+		Binary:       binary,
+		Args:         args,
+		Env:          env,
+		InitOptions:  initOpts,
+		CapOverrides: capOverrides,
+		State:        LSPStateIdle,
 	}
 }
 
@@ -136,7 +147,7 @@ func (p *Pool) GetOrStart(ctx context.Context, name string, initParams *lsp.Init
 		return nil, fmt.Errorf("building %s: %w", name, err)
 	}
 
-	proc, err := p.executor.Execute(inst.ctx, binPath, inst.Args)
+	proc, err := p.executor.Execute(inst.ctx, binPath, inst.Args, inst.Env)
 	if err != nil {
 		inst.State = LSPStateFailed
 		inst.Error = err
@@ -156,7 +167,16 @@ func (p *Pool) GetOrStart(ctx context.Context, name string, initParams *lsp.Init
 	}()
 
 	if initParams != nil {
-		result, err := inst.Conn.Call(inst.ctx, lsp.MethodInitialize, initParams)
+		// Merge LSP-specific init options into params
+		customParams := *initParams
+		if len(inst.InitOptions) > 0 {
+			customParams.InitializationOptions = mergeInitOptionsToJSON(
+				initParams.InitializationOptions,
+				inst.InitOptions,
+			)
+		}
+
+		result, err := inst.Conn.Call(inst.ctx, lsp.MethodInitialize, &customParams)
 		if err != nil {
 			inst.State = LSPStateFailed
 			inst.Error = err
@@ -173,6 +193,16 @@ func (p *Pool) GetOrStart(ctx context.Context, name string, initParams *lsp.Init
 		}
 
 		inst.Capabilities = &initResult.Capabilities
+
+		// Apply capability overrides
+		if inst.CapOverrides != nil {
+			lspOverride := &lsp.CapabilityOverride{
+				Disable: inst.CapOverrides.Disable,
+				Enable:  inst.CapOverrides.Enable,
+			}
+			modified := lsp.ApplyOverrides(*inst.Capabilities, lspOverride)
+			inst.Capabilities = &modified
+		}
 
 		if err := inst.Conn.Notify(lsp.MethodInitialized, struct{}{}); err != nil {
 			inst.State = LSPStateFailed
@@ -306,4 +336,30 @@ func (inst *LSPInstance) Notify(method string, params any) error {
 	}
 
 	return inst.Conn.Notify(method, params)
+}
+
+func mergeInitOptionsToJSON(existing json.RawMessage, custom map[string]any) json.RawMessage {
+	if len(custom) == 0 {
+		return existing
+	}
+
+	if existing == nil || len(existing) == 0 {
+		data, _ := json.Marshal(custom)
+		return data
+	}
+
+	var existingMap map[string]any
+	if err := json.Unmarshal(existing, &existingMap); err != nil {
+		// If existing isn't a map, use custom only
+		data, _ := json.Marshal(custom)
+		return data
+	}
+
+	// Merge custom over existing
+	for k, v := range custom {
+		existingMap[k] = v
+	}
+
+	data, _ := json.Marshal(existingMap)
+	return data
 }

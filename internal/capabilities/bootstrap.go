@@ -27,7 +27,7 @@ func Bootstrap(ctx context.Context, flake, binarySpec string) error {
 	fmt.Printf("Built: %s\n", binPath)
 	fmt.Println("Starting LSP to discover capabilities...")
 
-	proc, err := executor.Execute(ctx, binPath, nil)
+	proc, err := executor.Execute(ctx, binPath, nil, nil)
 	if err != nil {
 		return fmt.Errorf("starting LSP: %w", err)
 	}

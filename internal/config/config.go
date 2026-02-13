@@ -1,9 +1,11 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/BurntSushi/toml"
 )
@@ -14,13 +16,21 @@ type Config struct {
 }
 
 type LSP struct {
-	Name        string   `toml:"name"`
-	Flake       string   `toml:"flake"`
-	Binary      string   `toml:"binary,omitempty"`
-	Extensions  []string `toml:"extensions"`
-	Patterns    []string `toml:"patterns"`
-	LanguageIDs []string `toml:"language_ids"`
-	Args        []string `toml:"args"`
+	Name         string              `toml:"name"`
+	Flake        string              `toml:"flake"`
+	Binary       string              `toml:"binary,omitempty"`
+	Extensions   []string            `toml:"extensions"`
+	Patterns     []string            `toml:"patterns"`
+	LanguageIDs  []string            `toml:"language_ids"`
+	Args         []string            `toml:"args"`
+	Env          map[string]string   `toml:"env,omitempty"`
+	InitOptions  map[string]any      `toml:"init_options,omitempty"`
+	Capabilities *CapabilityOverride `toml:"capabilities,omitempty"`
+}
+
+type CapabilityOverride struct {
+	Disable []string `toml:"disable,omitempty"`
+	Enable  []string `toml:"enable,omitempty"`
 }
 
 func configDir() string {
@@ -111,6 +121,29 @@ func (c *Config) Validate() error {
 		if len(lsp.Extensions) == 0 && len(lsp.Patterns) == 0 && len(lsp.LanguageIDs) == 0 {
 			return fmt.Errorf("lsp[%d] (%s): at least one of extensions, patterns, or language_ids is required", i, lsp.Name)
 		}
+
+		// Validate environment variable names
+		for k := range lsp.Env {
+			if !isValidEnvVarName(k) {
+				return fmt.Errorf("lsp[%d] (%s): invalid environment variable name %q", i, lsp.Name, k)
+			}
+		}
+
+		// Validate init_options can be marshaled to JSON
+		if len(lsp.InitOptions) > 0 {
+			if _, err := json.Marshal(lsp.InitOptions); err != nil {
+				return fmt.Errorf("lsp[%d] (%s): invalid init_options: %w", i, lsp.Name, err)
+			}
+		}
+
+		// Validate capability names (warn only, don't error)
+		if lsp.Capabilities != nil {
+			for _, name := range append(lsp.Capabilities.Disable, lsp.Capabilities.Enable...) {
+				if !isKnownCapability(name) {
+					fmt.Fprintf(os.Stderr, "warning: unknown capability %q in lsp %s\n", name, lsp.Name)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -161,4 +194,54 @@ func AddLSP(lsp LSP) error {
 
 	cfg.LSPs = append(cfg.LSPs, lsp)
 	return Save(cfg)
+}
+
+func isValidEnvVarName(name string) bool {
+	matched, _ := regexp.MatchString(`^[a-zA-Z_][a-zA-Z0-9_]*$`, name)
+	return matched
+}
+
+var knownCapabilities = map[string]bool{
+	"hover":                       true,
+	"hoverProvider":               true,
+	"completion":                  true,
+	"completionProvider":          true,
+	"definition":                  true,
+	"definitionProvider":          true,
+	"typeDefinition":              true,
+	"typeDefinitionProvider":      true,
+	"implementation":              true,
+	"implementationProvider":      true,
+	"references":                  true,
+	"referencesProvider":          true,
+	"documentHighlight":           true,
+	"documentHighlightProvider":   true,
+	"documentSymbol":              true,
+	"documentSymbolProvider":      true,
+	"codeAction":                  true,
+	"codeActionProvider":          true,
+	"codeLens":                    true,
+	"codeLensProvider":            true,
+	"documentFormatting":          true,
+	"documentFormattingProvider":  true,
+	"documentRangeFormatting":     true,
+	"documentRangeFormattingProvider": true,
+	"rename":                      true,
+	"renameProvider":              true,
+	"foldingRange":                true,
+	"foldingRangeProvider":        true,
+	"selectionRange":              true,
+	"selectionRangeProvider":      true,
+	"semanticTokens":              true,
+	"semanticTokensProvider":      true,
+	"inlayHint":                   true,
+	"inlayHintProvider":           true,
+	"diagnostic":                  true,
+	"diagnosticProvider":          true,
+	"workspaceSymbol":             true,
+	"workspaceSymbolProvider":     true,
+}
+
+func isKnownCapability(name string) bool {
+	return knownCapabilities[name]
 }

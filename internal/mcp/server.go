@@ -44,7 +44,15 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 	s.pool = subprocess.NewPool(executor, s.lspNotificationHandler())
 
 	for _, l := range cfg.LSPs {
-		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args)
+		// Convert config.CapabilityOverride to subprocess.CapabilityOverride
+		var capOverrides *subprocess.CapabilityOverride
+		if l.Capabilities != nil {
+			capOverrides = &subprocess.CapabilityOverride{
+				Disable: l.Capabilities.Disable,
+				Enable:  l.Capabilities.Enable,
+			}
+		}
+		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, capOverrides)
 	}
 
 	s.bridge = NewBridge(s.pool, s.router)
