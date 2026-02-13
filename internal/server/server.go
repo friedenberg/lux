@@ -20,6 +20,7 @@ type Server struct {
 	clientConn  *jsonrpc.Conn
 	controlSrv  *control.Server
 	initParams  *lsp.InitializeParams
+	projectRoot string
 	initialized bool
 	mu          sync.RWMutex
 	done        chan struct{}
@@ -41,7 +42,15 @@ func New(cfg *config.Config) (*Server, error) {
 	s.pool = subprocess.NewPool(executor, serverNotificationHandler(s))
 
 	for _, l := range cfg.LSPs {
-		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args)
+		// Convert config.CapabilityOverride to subprocess.CapabilityOverride
+		var capOverrides *subprocess.CapabilityOverride
+		if l.Capabilities != nil {
+			capOverrides = &subprocess.CapabilityOverride{
+				Disable: l.Capabilities.Disable,
+				Enable:  l.Capabilities.Enable,
+			}
+		}
+		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, capOverrides)
 	}
 
 	return s, nil
@@ -97,4 +106,23 @@ func (s *Server) Pool() *subprocess.Pool {
 
 func (s *Server) Router() *Router {
 	return s.router
+}
+
+func (s *Server) reloadPool(cfg *config.Config) error {
+	s.cfg = cfg
+
+	// Re-register all LSPs with updated config
+	for _, l := range cfg.LSPs {
+		// Convert config.CapabilityOverride to subprocess.CapabilityOverride
+		var capOverrides *subprocess.CapabilityOverride
+		if l.Capabilities != nil {
+			capOverrides = &subprocess.CapabilityOverride{
+				Disable: l.Capabilities.Disable,
+				Enable:  l.Capabilities.Enable,
+			}
+		}
+		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, capOverrides)
+	}
+
+	return nil
 }

@@ -214,3 +214,127 @@ func ParseCapabilities(data json.RawMessage) (*ServerCapabilities, error) {
 	}
 	return &result.Capabilities, nil
 }
+
+type CapabilityOverride struct {
+	Disable []string
+	Enable  []string
+}
+
+// ApplyOverrides modifies capabilities based on enable/disable rules
+func ApplyOverrides(caps ServerCapabilities, override *CapabilityOverride) ServerCapabilities {
+	if override == nil {
+		return caps
+	}
+
+	modified := caps
+
+	// Disable specified capabilities (set to nil)
+	for _, name := range override.Disable {
+		setCapabilityField(&modified, name, nil)
+	}
+
+	// Enable specified capabilities (set to true or default value)
+	for _, name := range override.Enable {
+		setCapabilityField(&modified, name, true)
+	}
+
+	return modified
+}
+
+func setCapabilityField(caps *ServerCapabilities, fieldName string, value any) {
+	switch fieldName {
+	case "hover", "hoverProvider":
+		caps.HoverProvider = value
+
+	case "completion", "completionProvider":
+		if value == nil {
+			caps.CompletionProvider = nil
+		} else {
+			// Enable with defaults if not already set
+			if caps.CompletionProvider == nil {
+				caps.CompletionProvider = &CompletionOptions{}
+			}
+		}
+
+	case "definition", "definitionProvider":
+		caps.DefinitionProvider = value
+
+	case "declaration", "declarationProvider":
+		caps.DeclarationProvider = value
+
+	case "typeDefinition", "typeDefinitionProvider":
+		caps.TypeDefinitionProvider = value
+
+	case "implementation", "implementationProvider":
+		caps.ImplementationProvider = value
+
+	case "references", "referencesProvider":
+		caps.ReferencesProvider = value
+
+	case "documentHighlight", "documentHighlightProvider":
+		caps.DocumentHighlightProvider = value
+
+	case "documentSymbol", "documentSymbolProvider":
+		caps.DocumentSymbolProvider = value
+
+	case "codeAction", "codeActionProvider":
+		caps.CodeActionProvider = value
+
+	case "codeLens", "codeLensProvider":
+		if value == nil {
+			caps.CodeLensProvider = nil
+		} else {
+			if caps.CodeLensProvider == nil {
+				caps.CodeLensProvider = &CodeLensOptions{}
+			}
+		}
+
+	case "documentFormatting", "documentFormattingProvider":
+		caps.DocumentFormattingProvider = value
+
+	case "documentRangeFormatting", "documentRangeFormattingProvider":
+		caps.DocumentRangeFormattingProvider = value
+
+	case "rename", "renameProvider":
+		caps.RenameProvider = value
+
+	case "foldingRange", "foldingRangeProvider":
+		caps.FoldingRangeProvider = value
+
+	case "selectionRange", "selectionRangeProvider":
+		caps.SelectionRangeProvider = value
+
+	case "semanticTokens", "semanticTokensProvider":
+		caps.SemanticTokensProvider = value
+
+	case "inlayHint", "inlayHintProvider":
+		caps.InlayHintProvider = value
+
+	case "diagnostic", "diagnosticProvider":
+		caps.DiagnosticProvider = value
+
+	case "workspaceSymbol", "workspaceSymbolProvider":
+		caps.WorkspaceSymbolProvider = value
+
+	case "documentLink", "documentLinkProvider":
+		if value == nil {
+			caps.DocumentLinkProvider = nil
+		} else {
+			if caps.DocumentLinkProvider == nil {
+				caps.DocumentLinkProvider = &DocumentLinkOptions{}
+			}
+		}
+
+	case "color", "colorProvider":
+		caps.ColorProvider = value
+
+	case "signatureHelp", "signatureHelpProvider":
+		if value == nil {
+			caps.SignatureHelpProvider = nil
+		} else {
+			if caps.SignatureHelpProvider == nil {
+				caps.SignatureHelpProvider = &SignatureHelpOptions{}
+			}
+		}
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/amarbel-llc/go-lib-mcp/jsonrpc"
+	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/subprocess"
 )
@@ -43,6 +44,27 @@ func (h *Handler) handleInitialize(ctx context.Context, msg *jsonrpc.Message) (*
 
 	h.server.mu.Lock()
 	h.server.initParams = &params
+
+	// Detect project root from initialize params and load project config
+	if params.RootURI != nil {
+		projectRoot := params.RootURI.Path()
+		h.server.projectRoot = projectRoot
+
+		// Try to load project config
+		projectCfg, err := config.LoadWithProject(projectRoot)
+		if err == nil {
+			// Successfully loaded project config, reload pool
+			if reloadErr := h.server.reloadPool(projectCfg); reloadErr == nil {
+				// Update router with new config
+				newRouter, routerErr := NewRouter(projectCfg)
+				if routerErr == nil {
+					h.server.router = newRouter
+				}
+			}
+		}
+		// If error, just continue with global config
+	}
+
 	h.server.initialized = true
 	h.server.mu.Unlock()
 
