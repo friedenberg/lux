@@ -25,6 +25,8 @@ type LSP struct {
 	Args         []string            `toml:"args"`
 	Env          map[string]string   `toml:"env,omitempty"`
 	InitOptions  map[string]any      `toml:"init_options,omitempty"`
+	Settings     map[string]any      `toml:"settings,omitempty"`
+	SettingsKey  string              `toml:"settings_key,omitempty"`
 	Capabilities *CapabilityOverride `toml:"capabilities,omitempty"`
 }
 
@@ -136,6 +138,13 @@ func (c *Config) Validate() error {
 			}
 		}
 
+		// Validate settings can be marshaled to JSON
+		if len(lsp.Settings) > 0 {
+			if _, err := json.Marshal(lsp.Settings); err != nil {
+				return fmt.Errorf("lsp[%d] (%s): invalid settings: %w", i, lsp.Name, err)
+			}
+		}
+
 		// Validate capability names (warn only, don't error)
 		if lsp.Capabilities != nil {
 			for _, name := range append(lsp.Capabilities.Disable, lsp.Capabilities.Enable...) {
@@ -146,6 +155,13 @@ func (c *Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (l *LSP) SettingsWireKey() string {
+	if l.SettingsKey != "" {
+		return l.SettingsKey
+	}
+	return l.Name
 }
 
 func (c *Config) FindLSP(name string) *LSP {

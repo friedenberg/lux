@@ -44,7 +44,9 @@ func New(cfg *config.Config) (*Server, error) {
 		done:     make(chan struct{}),
 	}
 
-	s.pool = subprocess.NewPool(executor, serverNotificationHandler(s))
+	s.pool = subprocess.NewPool(executor, func(lspName string) jsonrpc.Handler {
+		return serverNotificationHandler(s, lspName)
+	})
 
 	for _, l := range cfg.LSPs {
 		// Convert config.CapabilityOverride to subprocess.CapabilityOverride
@@ -55,7 +57,7 @@ func New(cfg *config.Config) (*Server, error) {
 				Enable:  l.Capabilities.Enable,
 			}
 		}
-		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, capOverrides)
+		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, l.Settings, l.SettingsWireKey(), capOverrides)
 	}
 
 	fmtCfg, err := config.LoadMergedFormatters()
@@ -138,7 +140,7 @@ func (s *Server) reloadPool(cfg *config.Config) error {
 				Enable:  l.Capabilities.Enable,
 			}
 		}
-		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, capOverrides)
+		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, l.Settings, l.SettingsWireKey(), capOverrides)
 	}
 
 	return nil

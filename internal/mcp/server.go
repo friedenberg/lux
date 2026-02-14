@@ -43,7 +43,9 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 	}
 
 	executor := subprocess.NewNixExecutor()
-	s.pool = subprocess.NewPool(executor, s.lspNotificationHandler())
+	s.pool = subprocess.NewPool(executor, func(lspName string) jsonrpc.Handler {
+		return s.lspNotificationHandler()
+	})
 
 	for _, l := range cfg.LSPs {
 		// Convert config.CapabilityOverride to subprocess.CapabilityOverride
@@ -54,7 +56,7 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 				Enable:  l.Capabilities.Enable,
 			}
 		}
-		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, capOverrides)
+		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, l.Settings, l.SettingsWireKey(), capOverrides)
 	}
 
 	var fmtRouter *formatter.Router

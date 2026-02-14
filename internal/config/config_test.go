@@ -219,6 +219,158 @@ func TestAddLSP_WithBinary(t *testing.T) {
 	}
 }
 
+func TestLSP_SettingsField_TOML(t *testing.T) {
+	input := `
+name = "gopls"
+flake = "nixpkgs#gopls"
+extensions = ["go"]
+language_ids = ["go"]
+
+[settings]
+  gofumpt = true
+  staticcheck = true
+
+  [settings.analyses]
+    unusedparams = true
+    shadow = true
+    ST1000 = false
+`
+	var lsp LSP
+	if err := toml.Unmarshal([]byte(input), &lsp); err != nil {
+		t.Fatalf("failed to parse TOML: %v", err)
+	}
+
+	if lsp.Settings == nil {
+		t.Fatal("expected Settings to be non-nil")
+	}
+
+	if gofumpt, ok := lsp.Settings["gofumpt"].(bool); !ok || !gofumpt {
+		t.Errorf("expected gofumpt=true, got %v", lsp.Settings["gofumpt"])
+	}
+
+	analyses, ok := lsp.Settings["analyses"].(map[string]any)
+	if !ok {
+		t.Fatal("expected analyses to be a map")
+	}
+
+	if shadow, ok := analyses["shadow"].(bool); !ok || !shadow {
+		t.Errorf("expected analyses.shadow=true, got %v", analyses["shadow"])
+	}
+
+	if st1000, ok := analyses["ST1000"].(bool); !ok || st1000 {
+		t.Errorf("expected analyses.ST1000=false, got %v", analyses["ST1000"])
+	}
+}
+
+func TestLSP_SettingsValidation(t *testing.T) {
+	cfg := &Config{
+		LSPs: []LSP{
+			{
+				Name:       "test",
+				Flake:      "nixpkgs#test",
+				Extensions: []string{"go"},
+				Settings: map[string]any{
+					"valid_key": "valid_value",
+					"nested": map[string]any{
+						"deep": true,
+					},
+				},
+			},
+		},
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("expected valid settings to pass validation, got: %v", err)
+	}
+}
+
+func TestLSP_SettingsWireKey(t *testing.T) {
+	tests := []struct {
+		name        string
+		lspName     string
+		settingsKey string
+		expected    string
+	}{
+		{"defaults to name", "gopls", "", "gopls"},
+		{"uses explicit key", "gopls", "custom", "custom"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lsp := &LSP{Name: tt.lspName, SettingsKey: tt.settingsKey}
+			if got := lsp.SettingsWireKey(); got != tt.expected {
+				t.Errorf("SettingsWireKey() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLSP_SettingsDeepMerge(t *testing.T) {
+	global := LSP{
+		Name:       "gopls",
+		Flake:      "nixpkgs#gopls",
+		Extensions: []string{"go"},
+		Settings: map[string]any{
+			"gofumpt":     true,
+			"staticcheck": true,
+			"analyses": map[string]any{
+				"unusedparams": true,
+				"shadow":       true,
+			},
+		},
+	}
+
+	project := LSP{
+		Name:       "gopls",
+		Flake:      "nixpkgs#gopls",
+		Extensions: []string{"go"},
+		Settings: map[string]any{
+			"staticcheck": false,
+			"analyses": map[string]any{
+				"shadow":  false,
+				"ST1000":  false,
+			},
+		},
+	}
+
+	result := mergeLSP(global, project)
+
+	if result.Settings == nil {
+		t.Fatal("expected merged Settings to be non-nil")
+	}
+
+	// gofumpt should be preserved from global
+	if gofumpt, ok := result.Settings["gofumpt"].(bool); !ok || !gofumpt {
+		t.Errorf("expected gofumpt=true (from global), got %v", result.Settings["gofumpt"])
+	}
+
+	// staticcheck should be overridden by project
+	if sc, ok := result.Settings["staticcheck"].(bool); !ok || sc {
+		t.Errorf("expected staticcheck=false (from project), got %v", result.Settings["staticcheck"])
+	}
+
+	// analyses should be deep merged
+	analyses, ok := result.Settings["analyses"].(map[string]any)
+	if !ok {
+		t.Fatal("expected analyses to be a map")
+	}
+
+	// unusedparams from global should be preserved
+	if up, ok := analyses["unusedparams"].(bool); !ok || !up {
+		t.Errorf("expected analyses.unusedparams=true (from global), got %v", analyses["unusedparams"])
+	}
+
+	// shadow should be overridden by project
+	if shadow, ok := analyses["shadow"].(bool); !ok || shadow {
+		t.Errorf("expected analyses.shadow=false (from project), got %v", analyses["shadow"])
+	}
+
+	// ST1000 should be added from project
+	if st, ok := analyses["ST1000"].(bool); !ok || st {
+		t.Errorf("expected analyses.ST1000=false (from project), got %v", analyses["ST1000"])
+	}
+}
+
 func TestAddLSP_UpdateWithBinary(t *testing.T) {
 	tmpDir := t.TempDir()
 	os.Setenv("XDG_CONFIG_HOME", tmpDir)

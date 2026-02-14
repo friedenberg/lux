@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -48,6 +49,8 @@ type LSPInstance struct {
 	Args         []string
 	Env          map[string]string
 	InitOptions  map[string]any
+	Settings     map[string]any
+	SettingsKey  string
 	CapOverrides *CapabilityOverride
 	State        LSPState
 	Process      *Process
@@ -66,22 +69,25 @@ type CapabilityOverride struct {
 	Enable  []string
 }
 
+// HandlerFactory creates a jsonrpc.Handler for a specific LSP instance by name.
+type HandlerFactory func(lspName string) jsonrpc.Handler
+
 type Pool struct {
-	executor  Executor
-	instances map[string]*LSPInstance
-	mu        sync.RWMutex
-	handler   jsonrpc.Handler
+	executor       Executor
+	instances      map[string]*LSPInstance
+	mu             sync.RWMutex
+	handlerFactory HandlerFactory
 }
 
-func NewPool(executor Executor, handler jsonrpc.Handler) *Pool {
+func NewPool(executor Executor, handlerFactory HandlerFactory) *Pool {
 	return &Pool{
-		executor:  executor,
-		instances: make(map[string]*LSPInstance),
-		handler:   handler,
+		executor:       executor,
+		instances:      make(map[string]*LSPInstance),
+		handlerFactory: handlerFactory,
 	}
 }
 
-func (p *Pool) Register(name, flake, binary string, args []string, env map[string]string, initOpts map[string]any, capOverrides *CapabilityOverride) {
+func (p *Pool) Register(name, flake, binary string, args []string, env map[string]string, initOpts map[string]any, settings map[string]any, settingsKey string, capOverrides *CapabilityOverride) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -92,6 +98,8 @@ func (p *Pool) Register(name, flake, binary string, args []string, env map[strin
 		Args:         args,
 		Env:          env,
 		InitOptions:  initOpts,
+		Settings:     settings,
+		SettingsKey:  settingsKey,
 		CapOverrides: capOverrides,
 		State:        LSPStateIdle,
 	}
@@ -155,7 +163,7 @@ func (p *Pool) GetOrStart(ctx context.Context, name string, initParams *lsp.Init
 	}
 
 	inst.Process = proc
-	inst.Conn = jsonrpc.NewConn(proc.Stdout, proc.Stdin, p.handler)
+	inst.Conn = jsonrpc.NewConn(proc.Stdout, proc.Stdin, p.handlerFactory(name))
 
 	go func() {
 		if err := inst.Conn.Run(inst.ctx); err != nil {
@@ -209,6 +217,19 @@ func (p *Pool) GetOrStart(ctx context.Context, name string, initParams *lsp.Init
 			inst.Error = err
 			proc.Kill()
 			return nil, fmt.Errorf("sending initialized to %s: %w", name, err)
+		}
+
+		// Send settings via workspace/didChangeConfiguration
+		if len(inst.Settings) > 0 {
+			settingsPayload := map[string]any{
+				inst.SettingsKey: inst.Settings,
+			}
+			params := map[string]any{
+				"settings": settingsPayload,
+			}
+			if err := inst.Conn.Notify(lsp.MethodWorkspaceDidChangeConfiguration, params); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to send settings to %s: %v\n", name, err)
+			}
 		}
 	}
 

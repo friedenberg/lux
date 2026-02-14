@@ -202,7 +202,7 @@ func (h *Handler) forwardServerNotification(lspName string, msg *jsonrpc.Message
 	}
 }
 
-func serverNotificationHandler(s *Server) jsonrpc.Handler {
+func serverNotificationHandler(s *Server, lspName string) jsonrpc.Handler {
 	return func(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
 		if msg.IsNotification() {
 			if s.clientConn != nil {
@@ -211,6 +211,11 @@ func serverNotificationHandler(s *Server) jsonrpc.Handler {
 		}
 
 		if msg.IsRequest() {
+			// Intercept workspace/configuration requests from backend LSPs
+			if msg.Method == lsp.MethodWorkspaceConfiguration {
+				return handleWorkspaceConfiguration(s, lspName, msg)
+			}
+
 			if s.clientConn != nil {
 				result, err := s.clientConn.Call(ctx, msg.Method, msg.Params)
 				if err != nil {
@@ -224,6 +229,67 @@ func serverNotificationHandler(s *Server) jsonrpc.Handler {
 
 		return nil, nil
 	}
+}
+
+func handleWorkspaceConfiguration(s *Server, lspName string, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
+	inst, ok := s.pool.Get(lspName)
+	if !ok || len(inst.Settings) == 0 {
+		// No settings configured, return empty items
+		var params struct {
+			Items []struct{} `json:"items"`
+		}
+		if err := json.Unmarshal(msg.Params, &params); err != nil {
+			return jsonrpc.NewResponse(*msg.ID, []any{})
+		}
+		results := make([]any, len(params.Items))
+		for i := range results {
+			results[i] = map[string]any{}
+		}
+		return jsonrpc.NewResponse(*msg.ID, results)
+	}
+
+	var params struct {
+		Items []struct {
+			ScopeURI *string `json:"scopeUri,omitempty"`
+			Section  *string `json:"section,omitempty"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return jsonrpc.NewResponse(*msg.ID, []any{})
+	}
+
+	// Build the full settings map wrapped under the wire key
+	fullSettings := map[string]any{
+		inst.SettingsKey: inst.Settings,
+	}
+
+	results := make([]any, len(params.Items))
+	for i, item := range params.Items {
+		if item.Section == nil || *item.Section == "" {
+			results[i] = fullSettings
+		} else {
+			results[i] = lookupSettingsSection(fullSettings, *item.Section)
+		}
+	}
+
+	return jsonrpc.NewResponse(*msg.ID, results)
+}
+
+func lookupSettingsSection(settings map[string]any, section string) any {
+	parts := strings.Split(section, ".")
+	var current any = settings
+	for _, part := range parts {
+		m, ok := current.(map[string]any)
+		if !ok {
+			return map[string]any{}
+		}
+		val, exists := m[part]
+		if !exists {
+			return map[string]any{}
+		}
+		current = val
+	}
+	return current
 }
 
 func (s *Server) aggregateCapabilities() lsp.ServerCapabilities {

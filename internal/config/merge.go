@@ -107,14 +107,19 @@ func mergeLSP(global, project LSP) LSP {
 
 	// Deep merge for InitOptions
 	if len(global.InitOptions) > 0 {
-		result.InitOptions = mergeInitOptions(global.InitOptions, project.InitOptions)
+		result.InitOptions = deepMergeMap(global.InitOptions, project.InitOptions)
+	}
+
+	// Deep merge for Settings
+	if len(global.Settings) > 0 {
+		result.Settings = deepMergeMap(global.Settings, project.Settings)
 	}
 
 	return result
 }
 
-// mergeInitOptions performs deep merge of init options maps
-func mergeInitOptions(global, project map[string]any) map[string]any {
+// deepMergeMap performs deep merge of maps, with project values taking precedence
+func deepMergeMap(global, project map[string]any) map[string]any {
 	if len(project) == 0 {
 		return global
 	}
