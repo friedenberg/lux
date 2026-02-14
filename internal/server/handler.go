@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/amarbel-llc/go-lib-mcp/jsonrpc"
 	"github.com/amarbel-llc/lux/internal/config"
+	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/subprocess"
 )
@@ -96,6 +98,12 @@ func (h *Handler) handleDefault(ctx context.Context, msg *jsonrpc.Message) (*jso
 		return nil, nil
 	}
 
+	if msg.Method == lsp.MethodTextDocumentFormatting || msg.Method == lsp.MethodTextDocumentRangeFormatting {
+		if resp, handled := h.tryExternalFormat(ctx, msg); handled {
+			return resp, nil
+		}
+	}
+
 	lspName := h.server.router.Route(msg.Method, msg.Params)
 	if lspName == "" {
 		if msg.IsRequest() {
@@ -133,6 +141,59 @@ func (h *Handler) handleDefault(ctx context.Context, msg *jsonrpc.Message) (*jso
 	resp, _ := jsonrpc.NewResponse(*msg.ID, nil)
 	resp.Result = result
 	return resp, nil
+}
+
+func (h *Handler) tryExternalFormat(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, bool) {
+	if h.server.fmtRouter == nil {
+		return nil, false
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return nil, false
+	}
+
+	uri := lsp.ExtractURI(msg.Method, params)
+	if uri == "" {
+		return nil, false
+	}
+
+	filePath := uri.Path()
+	f := h.server.fmtRouter.Match(filePath)
+	if f == nil {
+		return nil, false
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		resp, _ := jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InternalError,
+			fmt.Sprintf("reading file for formatting: %v", err), nil)
+		return resp, true
+	}
+
+	result, err := formatter.Format(ctx, f, filePath, content, h.server.executor)
+	if err != nil {
+		resp, _ := jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InternalError,
+			fmt.Sprintf("external formatter %s failed: %v", f.Name, err), nil)
+		return resp, true
+	}
+
+	if !result.Changed {
+		resp, _ := jsonrpc.NewResponse(*msg.ID, []lsp.TextEdit{})
+		return resp, true
+	}
+
+	lines := strings.Count(string(content), "\n")
+	edit := lsp.TextEdit{
+		Range: lsp.Range{
+			Start: lsp.Position{Line: 0, Character: 0},
+			End:   lsp.Position{Line: lines + 1, Character: 0},
+		},
+		NewText: result.Formatted,
+	}
+
+	resp, _ := jsonrpc.NewResponse(*msg.ID, []lsp.TextEdit{edit})
+	return resp, true
 }
 
 func (h *Handler) forwardServerNotification(lspName string, msg *jsonrpc.Message) {

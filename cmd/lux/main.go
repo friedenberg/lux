@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -11,8 +12,10 @@ import (
 	"github.com/amarbel-llc/lux/internal/capabilities"
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/control"
+	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/mcp"
 	"github.com/amarbel-llc/lux/internal/server"
+	"github.com/amarbel-llc/lux/internal/subprocess"
 	luxtransport "github.com/amarbel-llc/lux/internal/transport"
 )
 
@@ -273,7 +276,69 @@ var mcpInstallClaudeCmd = &cobra.Command{
 	},
 }
 
+var formatStdout bool
+
+var formatCmd = &cobra.Command{
+	Use:   "format <file>",
+	Short: "Format a file using configured formatters",
+	Long:  `Format a file using external formatter programs configured in formatters.toml.`,
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		filePath, err := filepath.Abs(args[0])
+		if err != nil {
+			return fmt.Errorf("resolving path: %w", err)
+		}
+
+		fmtCfg, err := config.LoadMergedFormatters()
+		if err != nil {
+			return fmt.Errorf("loading formatter config: %w", err)
+		}
+
+		if err := fmtCfg.Validate(); err != nil {
+			return fmt.Errorf("invalid formatter config: %w", err)
+		}
+
+		router, err := formatter.NewRouter(fmtCfg)
+		if err != nil {
+			return fmt.Errorf("creating formatter router: %w", err)
+		}
+
+		f := router.Match(filePath)
+		if f == nil {
+			return fmt.Errorf("no formatter configured for %s", filePath)
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("reading file: %w", err)
+		}
+
+		executor := subprocess.NewNixExecutor()
+		result, err := formatter.Format(cmd.Context(), f, filePath, content, executor)
+		if err != nil {
+			return err
+		}
+
+		if formatStdout {
+			fmt.Print(result.Formatted)
+			return nil
+		}
+
+		if !result.Changed {
+			return nil
+		}
+
+		if err := os.WriteFile(filePath, []byte(result.Formatted), 0644); err != nil {
+			return fmt.Errorf("writing file: %w", err)
+		}
+
+		return nil
+	},
+}
+
 func init() {
+	formatCmd.Flags().BoolVar(&formatStdout, "stdout", false, "Print formatted output to stdout instead of writing in-place")
+
 	rootCmd.AddCommand(serveCmd)
 
 	addCmd.Flags().StringVarP(&addBinary, "binary", "b", "",
@@ -284,6 +349,7 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(stopCmd)
+	rootCmd.AddCommand(formatCmd)
 
 	mcpCmd.AddCommand(mcpStdioCmd)
 

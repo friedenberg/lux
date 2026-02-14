@@ -9,20 +9,25 @@ import (
 	"strings"
 
 	"github.com/amarbel-llc/go-lib-mcp/protocol"
+	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/server"
 	"github.com/amarbel-llc/lux/internal/subprocess"
 )
 
 type Bridge struct {
-	pool   *subprocess.Pool
-	router *server.Router
+	pool      *subprocess.Pool
+	router    *server.Router
+	fmtRouter *formatter.Router
+	executor  subprocess.Executor
 }
 
-func NewBridge(pool *subprocess.Pool, router *server.Router) *Bridge {
+func NewBridge(pool *subprocess.Pool, router *server.Router, fmtRouter *formatter.Router, executor subprocess.Executor) *Bridge {
 	return &Bridge{
-		pool:   pool,
-		router: router,
+		pool:      pool,
+		router:    router,
+		fmtRouter: fmtRouter,
+		executor:  executor,
 	}
 }
 
@@ -169,6 +174,10 @@ func (b *Bridge) Completion(ctx context.Context, uri lsp.DocumentURI, line, char
 }
 
 func (b *Bridge) Format(ctx context.Context, uri lsp.DocumentURI) (*protocol.ToolCallResult, error) {
+	if result, handled := b.tryExternalFormat(ctx, uri); handled {
+		return result, nil
+	}
+
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodTextDocumentFormatting, map[string]any{
 			"textDocument": lsp.TextDocumentIdentifier{URI: uri},
@@ -197,6 +206,48 @@ func (b *Bridge) Format(ctx context.Context, uri lsp.DocumentURI) (*protocol.Too
 	return &protocol.ToolCallResult{
 		Content: []protocol.ContentBlock{protocol.TextContent(text)},
 	}, nil
+}
+
+func (b *Bridge) tryExternalFormat(ctx context.Context, uri lsp.DocumentURI) (*protocol.ToolCallResult, bool) {
+	if b.fmtRouter == nil {
+		return nil, false
+	}
+
+	filePath := uri.Path()
+	f := b.fmtRouter.Match(filePath)
+	if f == nil {
+		return nil, false
+	}
+
+	content, err := b.readFile(uri)
+	if err != nil {
+		return protocol.ErrorResult(fmt.Sprintf("reading file for formatting: %v", err)), true
+	}
+
+	fmtResult, err := formatter.Format(ctx, f, filePath, []byte(content), b.executor)
+	if err != nil {
+		return protocol.ErrorResult(fmt.Sprintf("external formatter %s failed: %v", f.Name, err)), true
+	}
+
+	if !fmtResult.Changed {
+		return &protocol.ToolCallResult{
+			Content: []protocol.ContentBlock{protocol.TextContent("No formatting changes needed")},
+		}, true
+	}
+
+	lines := strings.Count(content, "\n")
+	edit := lsp.TextEdit{
+		Range: lsp.Range{
+			Start: lsp.Position{Line: 0, Character: 0},
+			End:   lsp.Position{Line: lines + 1, Character: 0},
+		},
+		NewText: fmtResult.Formatted,
+	}
+
+	text := formatTextEdits([]lsp.TextEdit{edit})
+	return &protocol.ToolCallResult{
+		Content: []protocol.ContentBlock{protocol.TextContent(text)},
+	}, true
 }
 
 func (b *Bridge) DocumentSymbols(ctx context.Context, uri lsp.DocumentURI) (*protocol.ToolCallResult, error) {

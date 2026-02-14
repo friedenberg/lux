@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 
 	"github.com/amarbel-llc/go-lib-mcp/jsonrpc"
 	"github.com/amarbel-llc/go-lib-mcp/transport"
 	"github.com/amarbel-llc/lux/internal/config"
+	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/server"
 	"github.com/amarbel-llc/lux/internal/subprocess"
 )
@@ -55,7 +57,19 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, capOverrides)
 	}
 
-	s.bridge = NewBridge(s.pool, s.router)
+	var fmtRouter *formatter.Router
+	fmtCfg, err := config.LoadMergedFormatters()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not load formatter config: %v\n", err)
+	} else {
+		fmtRouter, err = formatter.NewRouter(fmtCfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not create formatter router: %v\n", err)
+			fmtRouter = nil
+		}
+	}
+
+	s.bridge = NewBridge(s.pool, s.router, fmtRouter, executor)
 	s.tools = NewToolRegistry(s.bridge)
 	s.resources = NewResourceRegistry(s.pool, s.bridge, cfg)
 	s.prompts = NewPromptRegistry()
