@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/amarbel-llc/go-lib-mcp/protocol"
+	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/server"
@@ -46,6 +47,11 @@ func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(
 	inst, err := b.pool.GetOrStart(ctx, lspName, initParams)
 	if err != nil {
 		return nil, fmt.Errorf("starting LSP %s: %w", lspName, err)
+	}
+
+	projectRoot := b.projectRootForPath(uri.Path())
+	if err := inst.EnsureWorkspaceFolder(projectRoot); err != nil {
+		return nil, fmt.Errorf("adding workspace folder: %w", err)
 	}
 
 	langID := b.inferLanguageID(uri)
@@ -397,9 +403,17 @@ func (b *Bridge) readFile(uri lsp.DocumentURI) (string, error) {
 	return string(content), nil
 }
 
+func (b *Bridge) projectRootForPath(path string) string {
+	root, err := config.FindProjectRoot(path)
+	if err != nil {
+		return filepath.Dir(path)
+	}
+	return root
+}
+
 func (b *Bridge) defaultInitParams(uri lsp.DocumentURI) *lsp.InitializeParams {
 	path := uri.Path()
-	rootPath := filepath.Dir(path)
+	rootPath := b.projectRootForPath(path)
 	rootURI := lsp.URIFromPath(rootPath)
 
 	pid := os.Getpid()
@@ -412,6 +426,9 @@ func (b *Bridge) defaultInitParams(uri lsp.DocumentURI) *lsp.InitializeParams {
 			Version: "0.1.0",
 		},
 		Capabilities: lsp.ClientCapabilities{
+			Workspace: &lsp.WorkspaceClientCapabilities{
+				WorkspaceFolders: true,
+			},
 			TextDocument: &lsp.TextDocumentClientCapabilities{
 				Hover:          &lsp.HoverClientCaps{},
 				Definition:     &lsp.DefinitionClientCaps{},
@@ -421,6 +438,12 @@ func (b *Bridge) defaultInitParams(uri lsp.DocumentURI) *lsp.InitializeParams {
 				CodeAction:     &lsp.CodeActionClientCaps{},
 				Formatting:     &lsp.FormattingClientCaps{},
 				Rename:         &lsp.RenameClientCaps{},
+			},
+		},
+		WorkspaceFolders: []lsp.WorkspaceFolder{
+			{
+				URI:  rootURI,
+				Name: filepath.Base(rootPath),
 			},
 		},
 	}

@@ -59,9 +59,10 @@ type LSPInstance struct {
 	StartedAt    time.Time
 	Error        error
 
-	mu     sync.RWMutex
-	ctx    context.Context
-	cancel context.CancelFunc
+	knownFolders map[string]bool
+	mu           sync.RWMutex
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
 type CapabilityOverride struct {
@@ -237,6 +238,11 @@ func (p *Pool) GetOrStart(ctx context.Context, name string, initParams *lsp.Init
 	inst.StartedAt = time.Now()
 	inst.Error = nil
 
+	inst.knownFolders = make(map[string]bool)
+	if initParams != nil && initParams.RootURI != nil {
+		inst.knownFolders[initParams.RootURI.Path()] = true
+	}
+
 	return inst, nil
 }
 
@@ -357,6 +363,36 @@ func (inst *LSPInstance) Notify(method string, params any) error {
 	}
 
 	return inst.Conn.Notify(method, params)
+}
+
+func (inst *LSPInstance) EnsureWorkspaceFolder(projectRoot string) error {
+	inst.mu.Lock()
+	defer inst.mu.Unlock()
+
+	if inst.State != LSPStateRunning {
+		return fmt.Errorf("LSP %s is not running", inst.Name)
+	}
+
+	if inst.knownFolders[projectRoot] {
+		return nil
+	}
+
+	folder := lsp.WorkspaceFolder{
+		URI:  lsp.URIFromPath(projectRoot),
+		Name: projectRoot,
+	}
+
+	err := inst.Conn.Notify(lsp.MethodWorkspaceDidChangeFolders, lsp.DidChangeWorkspaceFoldersParams{
+		Event: lsp.WorkspaceFoldersChangeEvent{
+			Added: []lsp.WorkspaceFolder{folder},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("adding workspace folder %s: %w", projectRoot, err)
+	}
+
+	inst.knownFolders[projectRoot] = true
+	return nil
 }
 
 func mergeInitOptionsToJSON(existing json.RawMessage, custom map[string]any) json.RawMessage {

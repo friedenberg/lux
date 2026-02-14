@@ -499,6 +499,15 @@ type DiagnosticRelatedInformation struct {
 	Message  string   `json:"message"`
 }
 
+type DidChangeWorkspaceFoldersParams struct {
+	Event WorkspaceFoldersChangeEvent `json:"event"`
+}
+
+type WorkspaceFoldersChangeEvent struct {
+	Added   []WorkspaceFolder `json:"added"`
+	Removed []WorkspaceFolder `json:"removed"`
+}
+
 type TextEdit struct {
 	Range   Range  `json:"range"`
 	NewText string `json:"newText"`
