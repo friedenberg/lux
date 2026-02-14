@@ -9,6 +9,7 @@ import (
 	"github.com/amarbel-llc/go-lib-mcp/jsonrpc"
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/control"
+	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/subprocess"
 )
@@ -17,6 +18,8 @@ type Server struct {
 	cfg         *config.Config
 	pool        *subprocess.Pool
 	router      *Router
+	fmtRouter   *formatter.Router
+	executor    subprocess.Executor
 	clientConn  *jsonrpc.Conn
 	controlSrv  *control.Server
 	initParams  *lsp.InitializeParams
@@ -31,17 +34,31 @@ func New(cfg *config.Config) (*Server, error) {
 		return nil, fmt.Errorf("creating router: %w", err)
 	}
 
+	executor := subprocess.NewNixExecutor()
+
 	s := &Server{
-		cfg:    cfg,
-		router: router,
-		done:   make(chan struct{}),
+		cfg:      cfg,
+		router:   router,
+		executor: executor,
+		done:     make(chan struct{}),
 	}
 
-	executor := subprocess.NewNixExecutor()
 	s.pool = subprocess.NewPool(executor, serverNotificationHandler(s))
 
 	for _, l := range cfg.LSPs {
 		s.pool.Register(l.Name, l.Flake, l.Args)
+	}
+
+	fmtCfg, err := config.LoadMergedFormatters()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not load formatter config: %v\n", err)
+	} else {
+		fmtRouter, err := formatter.NewRouter(fmtCfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not create formatter router: %v\n", err)
+		} else {
+			s.fmtRouter = fmtRouter
+		}
 	}
 
 	return s, nil
@@ -97,4 +114,12 @@ func (s *Server) Pool() *subprocess.Pool {
 
 func (s *Server) Router() *Router {
 	return s.router
+}
+
+func (s *Server) FormatterRouter() *formatter.Router {
+	return s.fmtRouter
+}
+
+func (s *Server) Executor() subprocess.Executor {
+	return s.executor
 }

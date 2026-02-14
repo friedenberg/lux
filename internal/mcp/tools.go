@@ -97,7 +97,7 @@ func (r *ToolRegistry) registerBuiltinTools() {
 		}`),
 		r.handleCompletion)
 
-	r.register("lsp_format", "Get formatting edits for a document according to language-standard style. Agents should use this tool to get proper formatting instead of manually adjusting whitespace or running external formatters. Returns text edits needed to properly format the file. Note: returns edits but does not apply them - use Edit tool to apply the returned changes.",
+	r.register("lsp_format", "Get formatting edits for a document according to language-standard style. Uses external formatters (configured in formatters.toml) when available, falling back to LSP formatting. Agents should use this tool to get proper formatting instead of manually adjusting whitespace or running external formatters. Returns text edits needed to properly format the file. Note: returns edits but does not apply them - use Edit tool to apply the returned changes.",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
