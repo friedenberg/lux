@@ -211,14 +211,14 @@ When running as an MCP server, lux exposes these tools:
 
 | Tool | Description |
 |------|-------------|
-| `lsp_hover` | Get type information and documentation at a position |
-| `lsp_definition` | Go to the definition of a symbol |
-| `lsp_references` | Find all references to a symbol |
-| `lsp_completion` | Get code completions at a position |
-| `lsp_format` | Format a document |
-| `lsp_document_symbols` | List all symbols in a document |
-| `lsp_code_action` | Get available code actions at a position |
-| `lsp_rename` | Rename a symbol across the codebase |
+| `hover` | Get type information and documentation at a position |
+| `definition` | Go to the definition of a symbol |
+| `references` | Find all references to a symbol |
+| `completion` | Get code completions at a position |
+| `format` | Format a document |
+| `document_symbols` | List all symbols in a document |
+| `code_action` | Get available code actions at a position |
+| `rename` | Rename a symbol across the codebase |
 
 ## Development
 

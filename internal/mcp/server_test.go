@@ -65,16 +65,16 @@ func TestMCPToolsList(t *testing.T) {
 	}
 
 	expectedTools := []string{
-		"lsp_hover",
-		"lsp_definition",
-		"lsp_references",
-		"lsp_completion",
-		"lsp_format",
-		"lsp_document_symbols",
-		"lsp_code_action",
-		"lsp_rename",
-		"lsp_workspace_symbols",
-		"lsp_diagnostics",
+		"hover",
+		"definition",
+		"references",
+		"completion",
+		"format",
+		"document_symbols",
+		"code_action",
+		"rename",
+		"workspace_symbols",
+		"diagnostics",
 	}
 
 	if len(result.Tools) != len(expectedTools) {
