@@ -6,8 +6,8 @@ schema = 3
     hash = 'sha256-FIwyH67KryRWI9Bk4R8s1zFP0IgKR4L66wNQJYQZLeg='
 
   [mod.'github.com/amarbel-llc/go-lib-mcp']
-    version = 'v0.0.0-20260215043958-a82b81e2322b'
-    hash = 'sha256-ffeLli0PIGWUmRJjP9A3ucwj5uUIH53+Co6WGw1vyis='
+    version = 'v0.0.0-20260215160001-e634f96c4717'
+    hash = 'sha256-DiqonnNwZdI7TaYKUlgmS3DsjOxWpVtiMmXVmwD5nwQ='
 
   [mod.'github.com/cpuguy83/go-md2man/v2']
     version = 'v2.0.3'

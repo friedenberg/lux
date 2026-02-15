@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 
+	"github.com/amarbel-llc/go-lib-mcp/purse"
 	"github.com/amarbel-llc/go-lib-mcp/transport"
 	"github.com/amarbel-llc/lux/internal/capabilities"
 	"github.com/amarbel-llc/lux/internal/config"
@@ -358,6 +359,59 @@ var genmanCmd = &cobra.Command{
 	},
 }
 
+var generatePluginCmd = &cobra.Command{
+	Use:    "generate-plugin <output-dir>",
+	Short:  "Generate purse-first plugin manifest",
+	Hidden: true,
+	Args:   cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return purse.WritePlugin(args[0], buildPlugin())
+	},
+}
+
+func buildPlugin() purse.Plugin {
+	lspExtensions := []string{".go", ".py", ".ts", ".tsx", ".js", ".jsx", ".rs", ".nix"}
+
+	b := purse.NewPluginBuilder("lux").
+		Command("lux", "mcp", "stdio").
+		OnPostToolUse(
+			purse.HTTPPostAction{
+				PortEnv:      "LUX_PORT",
+				DefaultPort:  19419,
+				Path:         "/documents/open",
+				BodyTemplate: map[string]any{"uri": "file://{file_path}"},
+			},
+			&purse.NotifyCondition{
+				HasFilePath:      true,
+				FilePathAbsolute: true,
+			},
+		).
+		OnStop(purse.HTTPPostAction{
+			PortEnv:     "LUX_PORT",
+			DefaultPort: 19419,
+			Path:        "/documents/close-all",
+		})
+
+	b.Mappings().
+		Replaces(purse.BuiltinRead).
+		ForExtensions(lspExtensions...).
+		WithTool("lsp_hover", "getting type info or docs for a symbol").
+		WithTool("lsp_document_symbols", "understanding file structure").
+		Because("Use lux LSP tools for semantic code analysis").
+		Replaces(purse.BuiltinGrep).
+		ForExtensions(lspExtensions...).
+		WithTool("lsp_references", "finding all usages of a symbol").
+		WithTool("lsp_workspace_symbols", "searching for symbol definitions by name").
+		Because("Use lux LSP tools for semantic code search").
+		Replaces(purse.BuiltinGlob).
+		ForExtensions(lspExtensions...).
+		WithTool("lsp_workspace_symbols", "searching for symbol definitions by name").
+		WithTool("lsp_definition", "jumping to a symbol's definition").
+		Because("Use lux LSP tools for semantic code navigation")
+
+	return b.Build()
+}
+
 func init() {
 	formatCmd.Flags().BoolVar(&formatStdout, "stdout", false, "Print formatted output to stdout instead of writing in-place")
 
@@ -387,6 +441,7 @@ func init() {
 
 	rootCmd.AddCommand(mcpCmd)
 	rootCmd.AddCommand(genmanCmd)
+	rootCmd.AddCommand(generatePluginCmd)
 }
 
 func main() {

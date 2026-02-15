@@ -52,8 +52,7 @@
             scdoc < ${manDocSrc}/lux-config.5.scd > $out/share/man/man5/lux-config.5
 
             # purse-first plugin manifest
-            mkdir -p $out/share/purse-first/lux
-            cp ${./plugin.json} $out/share/purse-first/lux/plugin.json
+            $out/bin/lux generate-plugin $out/share/purse-first
           '';
 
           meta = with pkgs.lib; {

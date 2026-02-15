@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/BurntSushi/toml v1.3.2
-	github.com/amarbel-llc/go-lib-mcp v0.0.0-20260215043958-a82b81e2322b
+	github.com/amarbel-llc/go-lib-mcp v0.0.0-20260215160001-e634f96c4717
 	github.com/gobwas/glob v0.2.3
 	github.com/spf13/cobra v1.8.0
 )
