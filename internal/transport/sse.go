@@ -13,11 +13,20 @@ import (
 	"github.com/amarbel-llc/go-lib-mcp/jsonrpc"
 )
 
+// DocumentLifecycle allows the SSE transport to delegate document open/close
+// requests to the MCP server's DocumentManager without a circular dependency.
+type DocumentLifecycle interface {
+	OpenURI(ctx context.Context, uri string) error
+	CloseURI(uri string) error
+	CloseAllDocs()
+}
+
 type SSE struct {
 	addr     string
 	server   *http.Server
 	messages chan *jsonrpc.Message
 	writers  map[string]http.ResponseWriter
+	docMgr   DocumentLifecycle
 	mu       sync.RWMutex
 	closed   bool
 }
@@ -30,10 +39,17 @@ func NewSSE(addr string) *SSE {
 	}
 }
 
+func (t *SSE) SetDocumentLifecycle(dl DocumentLifecycle) {
+	t.docMgr = dl
+}
+
 func (t *SSE) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/sse", t.handleSSE)
 	mux.HandleFunc("/message", t.handleMessage)
+	mux.HandleFunc("/documents/open", t.handleDocumentOpen)
+	mux.HandleFunc("/documents/close", t.handleDocumentClose)
+	mux.HandleFunc("/documents/close-all", t.handleDocumentCloseAll)
 
 	t.server = &http.Server{
 		Addr:    t.addr,
@@ -151,6 +167,96 @@ func (t *SSE) Close() error {
 		return t.server.Shutdown(context.Background())
 	}
 	return nil
+}
+
+func (t *SSE) handleDocumentOpen(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if t.docMgr == nil {
+		http.Error(w, "Document manager not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		URI string `json:"uri"`
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusBadRequest)
+		return
+	}
+
+	if err := json.Unmarshal(body, &req); err != nil || req.URI == "" {
+		http.Error(w, "Invalid request: requires {\"uri\": \"file:///...\"}", http.StatusBadRequest)
+		return
+	}
+
+	if err := t.docMgr.OpenURI(r.Context(), req.URI); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"opened"}`))
+}
+
+func (t *SSE) handleDocumentClose(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if t.docMgr == nil {
+		http.Error(w, "Document manager not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		URI string `json:"uri"`
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusBadRequest)
+		return
+	}
+
+	if err := json.Unmarshal(body, &req); err != nil || req.URI == "" {
+		http.Error(w, "Invalid request: requires {\"uri\": \"file:///...\"}", http.StatusBadRequest)
+		return
+	}
+
+	if err := t.docMgr.CloseURI(req.URI); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"closed"}`))
+}
+
+func (t *SSE) handleDocumentCloseAll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if t.docMgr == nil {
+		http.Error(w, "Document manager not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	t.docMgr.CloseAllDocs()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"closed_all"}`))
 }
 
 // SSEClient is for connecting to an SSE MCP server (client-side)

@@ -21,6 +21,7 @@ type Bridge struct {
 	router    *server.Router
 	fmtRouter *formatter.Router
 	executor  subprocess.Executor
+	docMgr    *DocumentManager
 }
 
 func NewBridge(pool *subprocess.Pool, router *server.Router, fmtRouter *formatter.Router, executor subprocess.Executor) *Bridge {
@@ -32,15 +33,14 @@ func NewBridge(pool *subprocess.Pool, router *server.Router, fmtRouter *formatte
 	}
 }
 
+func (b *Bridge) SetDocumentManager(dm *DocumentManager) {
+	b.docMgr = dm
+}
+
 func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(*subprocess.LSPInstance) (json.RawMessage, error)) (json.RawMessage, error) {
 	lspName := b.router.RouteByURI(uri)
 	if lspName == "" {
 		return nil, fmt.Errorf("no LSP configured for %s", uri)
-	}
-
-	content, err := b.readFile(uri)
-	if err != nil {
-		return nil, fmt.Errorf("reading file: %w", err)
 	}
 
 	initParams := b.defaultInitParams(uri)
@@ -52,6 +52,22 @@ func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(
 	projectRoot := b.projectRootForPath(uri.Path())
 	if err := inst.EnsureWorkspaceFolder(projectRoot); err != nil {
 		return nil, fmt.Errorf("adding workspace folder: %w", err)
+	}
+
+	// Use DocumentManager for persistent tracking if available
+	if b.docMgr != nil {
+		if !b.docMgr.IsOpen(uri) {
+			if err := b.docMgr.Open(ctx, uri); err != nil {
+				return nil, fmt.Errorf("opening document: %w", err)
+			}
+		}
+		return fn(inst)
+	}
+
+	// Fallback: ephemeral open/close when no DocumentManager
+	content, err := b.readFile(uri)
+	if err != nil {
+		return nil, fmt.Errorf("reading file: %w", err)
 	}
 
 	langID := b.inferLanguageID(uri)
@@ -437,7 +453,8 @@ func (b *Bridge) defaultInitParams(uri lsp.DocumentURI) *lsp.InitializeParams {
 				DocumentSymbol: &lsp.DocumentSymbolClientCaps{},
 				CodeAction:     &lsp.CodeActionClientCaps{},
 				Formatting:     &lsp.FormattingClientCaps{},
-				Rename:         &lsp.RenameClientCaps{},
+				Rename:             &lsp.RenameClientCaps{},
+				PublishDiagnostics: &lsp.PublishDiagnosticsClientCaps{},
 			},
 		},
 		WorkspaceFolders: []lsp.WorkspaceFolder{

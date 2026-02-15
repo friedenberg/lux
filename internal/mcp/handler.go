@@ -60,7 +60,7 @@ func (h *Handler) handleInitialize(ctx context.Context, msg *jsonrpc.Message) (*
 		ProtocolVersion: protocol.ProtocolVersion,
 		Capabilities: protocol.ServerCapabilities{
 			Tools:     &protocol.ToolsCapability{},
-			Resources: &protocol.ResourcesCapability{},
+			Resources: &protocol.ResourcesCapability{Subscribe: true},
 			Prompts:   &protocol.PromptsCapability{},
 		},
 		ServerInfo: protocol.Implementation{

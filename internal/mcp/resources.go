@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,14 +18,15 @@ import (
 )
 
 type ResourceRegistry struct {
-	pool    *subprocess.Pool
-	bridge  *Bridge
-	config  *config.Config
-	cwd     string
-	matcher *filematch.MatcherSet
+	pool      *subprocess.Pool
+	bridge    *Bridge
+	config    *config.Config
+	diagStore *DiagnosticsStore
+	cwd       string
+	matcher   *filematch.MatcherSet
 }
 
-func NewResourceRegistry(pool *subprocess.Pool, bridge *Bridge, cfg *config.Config) *ResourceRegistry {
+func NewResourceRegistry(pool *subprocess.Pool, bridge *Bridge, cfg *config.Config, diagStore *DiagnosticsStore) *ResourceRegistry {
 	cwd, _ := os.Getwd()
 
 	matcher := filematch.NewMatcherSet()
@@ -33,11 +35,12 @@ func NewResourceRegistry(pool *subprocess.Pool, bridge *Bridge, cfg *config.Conf
 	}
 
 	return &ResourceRegistry{
-		pool:    pool,
-		bridge:  bridge,
-		config:  cfg,
-		cwd:     cwd,
-		matcher: matcher,
+		pool:      pool,
+		bridge:    bridge,
+		config:    cfg,
+		diagStore: diagStore,
+		cwd:       cwd,
+		matcher:   matcher,
 	}
 }
 
@@ -72,6 +75,12 @@ func (r *ResourceRegistry) ListTemplates() []protocol.ResourceTemplate {
 			Description: "All symbols (functions, types, constants, etc.) in a file as reported by the LSP. Use file:// URI encoding for the path (e.g., lux://symbols/file:///path/to/file.go)",
 			MimeType:    "application/json",
 		},
+		{
+			URITemplate: "lux://diagnostics/{uri}",
+			Name:        "File Diagnostics",
+			Description: "Push diagnostics (errors, warnings) for a file as reported by the LSP. Updated in real-time via resource subscriptions.",
+			MimeType:    "application/json",
+		},
 	}
 }
 
@@ -87,6 +96,10 @@ func (r *ResourceRegistry) Read(ctx context.Context, uri string) (*protocol.Reso
 		if strings.HasPrefix(uri, "lux://symbols/") {
 			fileURI := strings.TrimPrefix(uri, "lux://symbols/")
 			return r.readSymbols(ctx, uri, fileURI)
+		}
+		if strings.HasPrefix(uri, "lux://diagnostics/") {
+			encodedURI := strings.TrimPrefix(uri, "lux://diagnostics/")
+			return r.readDiagnostics(uri, encodedURI)
 		}
 		return nil, fmt.Errorf("unknown resource: %s", uri)
 	}
@@ -301,6 +314,36 @@ func (r *ResourceRegistry) readSymbols(ctx context.Context, resourceURI, fileURI
 	}
 
 	data, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	return &protocol.ResourceReadResult{
+		Contents: []protocol.ResourceContent{
+			{
+				URI:      resourceURI,
+				MimeType: "application/json",
+				Text:     string(data),
+			},
+		},
+	}, nil
+}
+
+func (r *ResourceRegistry) readDiagnostics(resourceURI, encodedFileURI string) (*protocol.ResourceReadResult, error) {
+	fileURI, err := url.PathUnescape(encodedFileURI)
+	if err != nil {
+		return nil, fmt.Errorf("decoding URI: %w", err)
+	}
+
+	params, ok := r.diagStore.Get(lsp.DocumentURI(fileURI))
+	if !ok {
+		params = lsp.PublishDiagnosticsParams{
+			URI:         lsp.DocumentURI(fileURI),
+			Diagnostics: []lsp.Diagnostic{},
+		}
+	}
+
+	data, err := json.MarshalIndent(params, "", "  ")
 	if err != nil {
 		return nil, err
 	}

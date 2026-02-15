@@ -199,6 +199,8 @@ var mcpSSECmd = &cobra.Command{
 			return fmt.Errorf("creating MCP server: %w", err)
 		}
 
+		t.SetDocumentLifecycle(srv.DocumentManager())
+
 		// Start HTTP server in background
 		go func() {
 			if err := t.Start(cmd.Context()); err != nil {

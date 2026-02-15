@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -11,22 +12,25 @@ import (
 	"github.com/amarbel-llc/go-lib-mcp/transport"
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/formatter"
+	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/server"
 	"github.com/amarbel-llc/lux/internal/subprocess"
 )
 
 type Server struct {
-	cfg       *config.Config
-	transport transport.Transport
-	handler   *Handler
-	pool      *subprocess.Pool
-	router    *server.Router
-	bridge    *Bridge
-	tools     *ToolRegistry
-	resources *ResourceRegistry
-	prompts   *PromptRegistry
-	done      chan struct{}
-	wg        sync.WaitGroup
+	cfg        *config.Config
+	transport  transport.Transport
+	handler    *Handler
+	pool       *subprocess.Pool
+	router     *server.Router
+	bridge     *Bridge
+	docMgr     *DocumentManager
+	diagStore  *DiagnosticsStore
+	tools      *ToolRegistry
+	resources  *ResourceRegistry
+	prompts    *PromptRegistry
+	done       chan struct{}
+	wg         sync.WaitGroup
 }
 
 func New(cfg *config.Config, t transport.Transport) (*Server, error) {
@@ -72,8 +76,11 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 	}
 
 	s.bridge = NewBridge(s.pool, s.router, fmtRouter, executor)
+	s.docMgr = NewDocumentManager(s.pool, s.router, s.bridge)
+	s.bridge.SetDocumentManager(s.docMgr)
+	s.diagStore = NewDiagnosticsStore()
 	s.tools = NewToolRegistry(s.bridge)
-	s.resources = NewResourceRegistry(s.pool, s.bridge, cfg)
+	s.resources = NewResourceRegistry(s.pool, s.bridge, cfg, s.diagStore)
 	s.prompts = NewPromptRegistry()
 	s.handler = NewHandler(s)
 	return s, nil
@@ -131,6 +138,7 @@ func (s *Server) handleMessage(ctx context.Context, msg *jsonrpc.Message) {
 func (s *Server) gracefulShutdown() {
 	// Wait for all in-flight requests to complete
 	s.wg.Wait()
+	s.docMgr.CloseAll()
 	s.pool.StopAll()
 	s.transport.Close()
 }
@@ -139,10 +147,29 @@ func (s *Server) Close() {
 	close(s.done)
 }
 
+func (s *Server) DocumentManager() *DocumentManager {
+	return s.docMgr
+}
+
 func (s *Server) lspNotificationHandler() jsonrpc.Handler {
 	return func(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
-		// For now, we ignore notifications from LSP servers
-		// In the future, we could forward diagnostics as MCP resource updates
+		if msg.Method == "textDocument/publishDiagnostics" && msg.Params != nil {
+			var params lsp.PublishDiagnosticsParams
+			if err := json.Unmarshal(msg.Params, &params); err != nil {
+				return nil, nil
+			}
+
+			s.diagStore.Update(params)
+
+			resourceURI := DiagnosticsResourceURI(params.URI)
+			notification, err := jsonrpc.NewNotification("notifications/resources/updated", map[string]string{
+				"uri": resourceURI,
+			})
+			if err == nil {
+				s.transport.Write(notification)
+			}
+		}
+
 		return nil, nil
 	}
 }
