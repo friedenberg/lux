@@ -1,7 +1,7 @@
 github.com/BurntSushi/toml v1.3.2 h1:o7IhLm0Msx3BaB+n3Ag7L8EVlByGnpq14C4YWiu/gL8=
 github.com/BurntSushi/toml v1.3.2/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
-github.com/amarbel-llc/go-lib-mcp v0.0.0-20260211215551-143832b3ba7f h1:cOc/Kl94Mp9u8ZMTCcADLlmg0/+3VzbzgStU1Bj0BXI=
-github.com/amarbel-llc/go-lib-mcp v0.0.0-20260211215551-143832b3ba7f/go.mod h1:WeBhnp8sRqy+s9jbWBLPeLzKK18CszNn6f2L9PQab0U=
+github.com/amarbel-llc/go-lib-mcp v0.0.0-20260215043958-a82b81e2322b h1:Abh327e44jcZTlMRNE7GMi4Hu2vfpNPGq9GDBTxlaGY=
+github.com/amarbel-llc/go-lib-mcp v0.0.0-20260215043958-a82b81e2322b/go.mod h1:WeBhnp8sRqy+s9jbWBLPeLzKK18CszNn6f2L9PQab0U=
 github.com/cpuguy83/go-md2man/v2 v2.0.3 h1:qMCsGGgs+MAzDFyp9LpAe1Lqy/fY/qCovCm0qnXZOBM=
 github.com/cpuguy83/go-md2man/v2 v2.0.3/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/gobwas/glob v0.2.3 h1:A4xDbljILXROh+kObIiy5kIaPYD8e96x1tgBhUI5J+Y=
