@@ -3,11 +3,14 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/amarbel-llc/go-lib-mcp/jsonrpc"
 	"github.com/amarbel-llc/go-lib-mcp/protocol"
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/formatter"
@@ -37,6 +40,39 @@ func (b *Bridge) SetDocumentManager(dm *DocumentManager) {
 	b.docMgr = dm
 }
 
+func isRetryableLSPError(err error) bool {
+	var rpcErr *jsonrpc.Error
+	if errors.As(err, &rpcErr) {
+		return rpcErr.Code == 0 && strings.Contains(rpcErr.Message, "no views")
+	}
+	return false
+}
+
+func (b *Bridge) callWithRetry(ctx context.Context, inst *subprocess.LSPInstance, fn func(*subprocess.LSPInstance) (json.RawMessage, error)) (json.RawMessage, error) {
+	const maxAttempts = 5
+	delay := 200 * time.Millisecond
+
+	for attempt := 1; ; attempt++ {
+		result, err := fn(inst)
+		if err == nil || !isRetryableLSPError(err) || attempt >= maxAttempts {
+			return result, err
+		}
+
+		fmt.Fprintf(os.Stderr, "[lux] retrying LSP call (attempt %d/%d, waiting %v): %v\n", attempt, maxAttempts, delay, err)
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+
+		delay *= 2
+		if delay > 2*time.Second {
+			delay = 2 * time.Second
+		}
+	}
+}
+
 func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(*subprocess.LSPInstance) (json.RawMessage, error)) (json.RawMessage, error) {
 	lspName := b.router.RouteByURI(uri)
 	if lspName == "" {
@@ -61,7 +97,7 @@ func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(
 				return nil, fmt.Errorf("opening document: %w", err)
 			}
 		}
-		return fn(inst)
+		return b.callWithRetry(ctx, inst, fn)
 	}
 
 	// Fallback: ephemeral open/close when no DocumentManager
@@ -89,7 +125,7 @@ func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(
 		})
 	}()
 
-	return fn(inst)
+	return b.callWithRetry(ctx, inst, fn)
 }
 
 func (b *Bridge) Hover(ctx context.Context, uri lsp.DocumentURI, line, character int) (*protocol.ToolCallResult, error) {

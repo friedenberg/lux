@@ -15,5 +15,5 @@ type Process struct {
 
 type Executor interface {
 	Build(ctx context.Context, flake, binarySpec string) (string, error)
-	Execute(ctx context.Context, path string, args []string, env map[string]string) (*Process, error)
+	Execute(ctx context.Context, path string, args []string, env map[string]string, workDir string) (*Process, error)
 }

@@ -124,8 +124,12 @@ func findExecutable(storePath, binarySpec string) (string, error) {
 	return "", fmt.Errorf("no executable found in %s/bin", storePath)
 }
 
-func (e *NixExecutor) Execute(ctx context.Context, path string, args []string, env map[string]string) (*Process, error) {
+func (e *NixExecutor) Execute(ctx context.Context, path string, args []string, env map[string]string, workDir string) (*Process, error) {
 	cmd := exec.CommandContext(ctx, path, args...)
+
+	if workDir != "" {
+		cmd.Dir = workDir
+	}
 
 	// Set up environment variables
 	if len(env) > 0 {

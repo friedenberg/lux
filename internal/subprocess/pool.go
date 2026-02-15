@@ -156,7 +156,12 @@ func (p *Pool) GetOrStart(ctx context.Context, name string, initParams *lsp.Init
 		return nil, fmt.Errorf("building %s: %w", name, err)
 	}
 
-	proc, err := p.executor.Execute(inst.ctx, binPath, inst.Args, inst.Env)
+	var workDir string
+	if initParams != nil && initParams.RootPath != nil {
+		workDir = *initParams.RootPath
+	}
+
+	proc, err := p.executor.Execute(inst.ctx, binPath, inst.Args, inst.Env, workDir)
 	if err != nil {
 		inst.State = LSPStateFailed
 		inst.Error = err
@@ -164,6 +169,7 @@ func (p *Pool) GetOrStart(ctx context.Context, name string, initParams *lsp.Init
 	}
 
 	inst.Process = proc
+	go NewStderrLogger(name, os.Stderr).Run(proc.Stderr)
 	inst.Conn = jsonrpc.NewConn(proc.Stdout, proc.Stdin, p.handlerFactory(name))
 
 	go func() {
