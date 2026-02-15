@@ -9,9 +9,13 @@ schema = 3
     version = 'v0.0.0-20260215160001-e634f96c4717'
     hash = 'sha256-DiqonnNwZdI7TaYKUlgmS3DsjOxWpVtiMmXVmwD5nwQ='
 
+  [mod.'github.com/amarbel-llc/purse-first']
+    version = 'v0.0.0-20260215215029-92624a7cb627'
+    hash = 'sha256-J/BG8HvDQ4IjwdQoU5wDjjVN36dd4DSOvZKFDonwZO8='
+
   [mod.'github.com/cpuguy83/go-md2man/v2']
-    version = 'v2.0.3'
-    hash = 'sha256-FAMxR5eBO9LQp6ev1b7zaPUS5aoNz1GtsPpoArjiJVw='
+    version = 'v2.0.6'
+    hash = 'sha256-wJnHgp+NPchXkR71ARLMjo4VryzgGkz2tYWPsC+3eFo='
 
   [mod.'github.com/gobwas/glob']
     version = 'v0.2.3'
@@ -26,13 +30,13 @@ schema = 3
     hash = 'sha256-R+84l1si8az5yDqd5CYcFrTyNZ1eSYlpXKq6nFt4OTQ='
 
   [mod.'github.com/spf13/cobra']
-    version = 'v1.8.0'
-    hash = 'sha256-oAE+fEaRfZPE541IPWE0GMeBBYgH2DMhtZNxzp7DFlY='
+    version = 'v1.10.2'
+    hash = 'sha256-nbRCTFiDCC2jKK7AHi79n7urYCMP5yDZnWtNVJrDi+k='
 
   [mod.'github.com/spf13/pflag']
-    version = 'v1.0.5'
-    hash = 'sha256-w9LLYzxxP74WHT4ouBspH/iQZXjuAh2WQCHsuvyEjAw='
+    version = 'v1.0.9'
+    hash = 'sha256-YAjyYpq5BXCosVJtvYLWFG1t4gma2ylzc7ILLoj/hD8='
 
-  [mod.'gopkg.in/yaml.v3']
-    version = 'v3.0.1'
-    hash = 'sha256-FqL9TKYJ0XkNwJFnq9j0VvJ5ZUU1RvH/52h/f5bkYAU='
+  [mod.'go.yaml.in/yaml/v3']
+    version = 'v3.0.4'
+    hash = 'sha256-NkGFiDPoCxbr3LFsI6OCygjjkY0rdmg5ggvVVwpyDQ4='
