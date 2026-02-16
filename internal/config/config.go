@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -27,7 +28,10 @@ type LSP struct {
 	InitOptions  map[string]any      `toml:"init_options,omitempty"`
 	Settings     map[string]any      `toml:"settings,omitempty"`
 	SettingsKey  string              `toml:"settings_key,omitempty"`
-	Capabilities *CapabilityOverride `toml:"capabilities,omitempty"`
+	Capabilities    *CapabilityOverride `toml:"capabilities,omitempty"`
+	WaitForReady    *bool               `toml:"wait_for_ready,omitempty"`
+	ReadyTimeout    string              `toml:"ready_timeout,omitempty"`
+	ActivityTimeout string              `toml:"activity_timeout,omitempty"`
 }
 
 type CapabilityOverride struct {
@@ -164,6 +168,35 @@ func (l *LSP) SettingsWireKey() string {
 		return l.SettingsKey
 	}
 	return l.Name
+}
+
+func (l *LSP) ShouldWaitForReady() bool {
+	if l.WaitForReady == nil {
+		return true
+	}
+	return *l.WaitForReady
+}
+
+func (l *LSP) ReadyTimeoutDuration() time.Duration {
+	if l.ReadyTimeout == "" {
+		return 10 * time.Minute
+	}
+	d, err := time.ParseDuration(l.ReadyTimeout)
+	if err != nil {
+		return 10 * time.Minute
+	}
+	return d
+}
+
+func (l *LSP) ActivityTimeoutDuration() time.Duration {
+	if l.ActivityTimeout == "" {
+		return 30 * time.Second
+	}
+	d, err := time.ParseDuration(l.ActivityTimeout)
+	if err != nil {
+		return 30 * time.Second
+	}
+	return d
 }
 
 func (c *Config) FindLSP(name string) *LSP {

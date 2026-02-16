@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -415,5 +416,97 @@ func TestAddLSP_UpdateWithBinary(t *testing.T) {
 	}
 	if cfg.LSPs[0].Flake != "nixpkgs#test-v2" {
 		t.Errorf("expected flake %q, got %q", "nixpkgs#test-v2", cfg.LSPs[0].Flake)
+	}
+}
+
+func TestLSP_ReadinessFields_TOML(t *testing.T) {
+	input := `
+name = "gopls"
+flake = "nixpkgs#gopls"
+extensions = ["go"]
+wait_for_ready = false
+ready_timeout = "5m"
+activity_timeout = "15s"
+`
+	var lsp LSP
+	if err := toml.Unmarshal([]byte(input), &lsp); err != nil {
+		t.Fatalf("failed to parse TOML: %v", err)
+	}
+
+	if lsp.WaitForReady == nil || *lsp.WaitForReady != false {
+		t.Errorf("expected WaitForReady=false, got %v", lsp.WaitForReady)
+	}
+	if lsp.ReadyTimeout != "5m" {
+		t.Errorf("expected ReadyTimeout=5m, got %q", lsp.ReadyTimeout)
+	}
+	if lsp.ActivityTimeout != "15s" {
+		t.Errorf("expected ActivityTimeout=15s, got %q", lsp.ActivityTimeout)
+	}
+}
+
+func TestLSP_ReadinessFields_Defaults(t *testing.T) {
+	input := `
+name = "gopls"
+flake = "nixpkgs#gopls"
+extensions = ["go"]
+`
+	var lsp LSP
+	if err := toml.Unmarshal([]byte(input), &lsp); err != nil {
+		t.Fatalf("failed to parse TOML: %v", err)
+	}
+
+	if lsp.WaitForReady != nil {
+		t.Errorf("expected WaitForReady=nil (default), got %v", *lsp.WaitForReady)
+	}
+
+	readyTimeout := lsp.ReadyTimeoutDuration()
+	if readyTimeout != 10*time.Minute {
+		t.Errorf("expected default ReadyTimeout=10m, got %v", readyTimeout)
+	}
+
+	activityTimeout := lsp.ActivityTimeoutDuration()
+	if activityTimeout != 30*time.Second {
+		t.Errorf("expected default ActivityTimeout=30s, got %v", activityTimeout)
+	}
+}
+
+func TestLSP_ReadinessFields_InvalidDuration(t *testing.T) {
+	input := `
+name = "gopls"
+flake = "nixpkgs#gopls"
+extensions = ["go"]
+ready_timeout = "not-a-duration"
+`
+	var lsp LSP
+	if err := toml.Unmarshal([]byte(input), &lsp); err != nil {
+		t.Fatalf("failed to parse TOML: %v", err)
+	}
+
+	readyTimeout := lsp.ReadyTimeoutDuration()
+	if readyTimeout != 10*time.Minute {
+		t.Errorf("expected fallback ReadyTimeout=10m, got %v", readyTimeout)
+	}
+}
+
+func TestLSP_ShouldWaitForReady(t *testing.T) {
+	trueVal := true
+	falseVal := false
+
+	tests := []struct {
+		name     string
+		lsp      LSP
+		expected bool
+	}{
+		{"nil defaults to true", LSP{WaitForReady: nil}, true},
+		{"explicit true", LSP{WaitForReady: &trueVal}, true},
+		{"explicit false", LSP{WaitForReady: &falseVal}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.lsp.ShouldWaitForReady(); got != tt.expected {
+				t.Errorf("ShouldWaitForReady() = %v, want %v", got, tt.expected)
+			}
+		})
 	}
 }
