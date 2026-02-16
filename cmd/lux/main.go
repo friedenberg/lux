@@ -396,23 +396,8 @@ var generatePluginCmd = &cobra.Command{
 	Hidden: true,
 	Args:   cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		reason := "Use lux LSP tools for semantic code analysis:\n- mcp__lux__lsp_hover: getting type info or docs for a symbol\n- mcp__lux__lsp_document_symbols: understanding file structure"
-
 		b := purse.NewPluginBuilder("lux").
-			Command("lux", "mcp", "stdio").
-			Mapping("Read").
-			Reason(reason).
-			Tool("hover", "getting type info or docs for a symbol").
-			Tool("definition", "jumping to a symbol's definition").
-			Tool("references", "finding all usages of a symbol").
-			Tool("document_symbols", "understanding file structure").
-			Tool("diagnostics", "getting compiler/linter errors for a file").
-			Done().
-			Mapping("Grep").
-			Reason(reason).
-			Tool("workspace_symbols", "searching for symbol definitions by name").
-			Tool("references", "finding all usages of a symbol").
-			Done()
+			Command("lux", "mcp", "stdio")
 
 		p := b.Build()
 		dir := args[0]
