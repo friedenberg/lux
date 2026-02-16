@@ -10,8 +10,8 @@ schema = 3
     hash = 'sha256-DiqonnNwZdI7TaYKUlgmS3DsjOxWpVtiMmXVmwD5nwQ='
 
   [mod.'github.com/amarbel-llc/purse-first']
-    version = 'v0.0.0-20260215215029-92624a7cb627'
-    hash = 'sha256-J/BG8HvDQ4IjwdQoU5wDjjVN36dd4DSOvZKFDonwZO8='
+    version = 'v0.0.0-20260216044631-615b2d5fc83b'
+    hash = 'sha256-9yTnE5A9vum0GqPuuY2zWFDVSymdCnSt6kg5QBjxN0g='
 
   [mod.'github.com/cpuguy83/go-md2man/v2']
     version = 'v2.0.6'

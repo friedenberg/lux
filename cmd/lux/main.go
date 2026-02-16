@@ -365,11 +365,38 @@ var generatePluginCmd = &cobra.Command{
 	Hidden: true,
 	Args:   cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		p := purse.NewPluginBuilder("lux").
-			Command("lux", "mcp", "stdio").
-			Build()
+		reason := "Use lux LSP tools for semantic code analysis:\n- mcp__lux__lsp_hover: getting type info or docs for a symbol\n- mcp__lux__lsp_document_symbols: understanding file structure"
 
-		return purse.WritePlugin(args[0], p)
+		b := purse.NewPluginBuilder("lux").
+			Command("lux", "mcp", "stdio").
+			Mapping("Read").
+			Reason(reason).
+			Tool("hover", "getting type info or docs for a symbol").
+			Tool("definition", "jumping to a symbol's definition").
+			Tool("references", "finding all usages of a symbol").
+			Tool("document_symbols", "understanding file structure").
+			Tool("diagnostics", "getting compiler/linter errors for a file").
+			Done().
+			Mapping("Grep").
+			Reason(reason).
+			Tool("workspace_symbols", "searching for symbol definitions by name").
+			Tool("references", "finding all usages of a symbol").
+			Done()
+
+		p := b.Build()
+		dir := args[0]
+
+		if err := purse.WritePlugin(dir, p); err != nil {
+			return fmt.Errorf("generating plugin: %w", err)
+		}
+
+		if mf := b.BuildMappings(); mf != nil {
+			if err := purse.WriteMappings(dir, p.Name, mf); err != nil {
+				return fmt.Errorf("generating mappings: %v", err)
+			}
+		}
+
+		return nil
 	},
 }
 
