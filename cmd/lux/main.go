@@ -156,6 +156,37 @@ var stopCmd = &cobra.Command{
 	},
 }
 
+var warmupCmd = &cobra.Command{
+	Use:   "warmup [dir]",
+	Short: "Pre-start LSPs for a directory",
+	Long:  `Scan a directory for matching files and eagerly start the relevant LSPs.`,
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		dir := "."
+		if len(args) > 0 {
+			dir = args[0]
+		}
+
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			return fmt.Errorf("resolving path: %w", err)
+		}
+
+		cfg, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("loading config: %w", err)
+		}
+
+		client, err := control.NewClient(cfg.SocketPath())
+		if err != nil {
+			return fmt.Errorf("connecting to server: %w", err)
+		}
+		defer client.Close()
+
+		return client.Warmup(absDir)
+	},
+}
+
 var mcpCmd = &cobra.Command{
 	Use:   "mcp",
 	Short: "Run as MCP server",
@@ -415,6 +446,7 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(startCmd)
 	rootCmd.AddCommand(stopCmd)
+	rootCmd.AddCommand(warmupCmd)
 	rootCmd.AddCommand(formatCmd)
 
 	mcpCmd.AddCommand(mcpStdioCmd)

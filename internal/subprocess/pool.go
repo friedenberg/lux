@@ -330,6 +330,31 @@ func (p *Pool) StopAll() {
 	}
 }
 
+func (p *Pool) Names() []string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	names := make([]string, 0, len(p.instances))
+	for name := range p.instances {
+		names = append(names, name)
+	}
+	return names
+}
+
+func (p *Pool) IsIdleOrFailed(name string) bool {
+	p.mu.RLock()
+	inst, ok := p.instances[name]
+	p.mu.RUnlock()
+
+	if !ok {
+		return false
+	}
+
+	inst.mu.RLock()
+	defer inst.mu.RUnlock()
+	return inst.State == LSPStateIdle || inst.State == LSPStateFailed
+}
+
 func (p *Pool) Status() []LSPStatus {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

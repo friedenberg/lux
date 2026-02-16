@@ -3,9 +3,11 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"os"
 
 	"github.com/amarbel-llc/go-lib-mcp/jsonrpc"
 	"github.com/amarbel-llc/go-lib-mcp/protocol"
+	"github.com/amarbel-llc/lux/internal/warmup"
 )
 
 type Handler struct {
@@ -55,6 +57,15 @@ func (h *Handler) handleInitialize(ctx context.Context, msg *jsonrpc.Message) (*
 	}
 
 	h.initialized = true
+
+	go func() {
+		cwd, err := os.Getwd()
+		if err != nil {
+			cwd = "."
+		}
+		warmup.StartAllLSPs(context.Background(), h.server.pool, h.server.cfg,
+			warmup.SynthesizeInitParams(cwd))
+	}()
 
 	result := protocol.InitializeResult{
 		ProtocolVersion: protocol.ProtocolVersion,

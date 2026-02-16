@@ -15,6 +15,7 @@ import (
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/server"
 	"github.com/amarbel-llc/lux/internal/subprocess"
+	"github.com/amarbel-llc/lux/internal/warmup"
 )
 
 type Server struct {
@@ -91,6 +92,9 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 	s.resources = NewResourceRegistry(s.pool, s.bridge, cfg, s.diagStore)
 	s.prompts = NewPromptRegistry()
 	s.handler = NewHandler(s)
+
+	go warmup.PreBuildAll(context.Background(), cfg, executor)
+
 	return s, nil
 }
 

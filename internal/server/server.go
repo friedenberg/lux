@@ -12,6 +12,7 @@ import (
 	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/subprocess"
+	"github.com/amarbel-llc/lux/internal/warmup"
 )
 
 type Server struct {
@@ -25,6 +26,7 @@ type Server struct {
 	initParams  *lsp.InitializeParams
 	projectRoot string
 	initialized bool
+	warmupOnce  sync.Once
 	mu          sync.RWMutex
 	done        chan struct{}
 }
@@ -72,6 +74,8 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 	}
 
+	go warmup.PreBuildAll(context.Background(), cfg, executor)
+
 	return s, nil
 }
 
@@ -82,7 +86,7 @@ func (s *Server) Run(ctx context.Context) error {
 	handler := NewHandler(s)
 	s.clientConn = jsonrpc.NewConn(os.Stdin, os.Stdout, handler.Handle)
 
-	controlSrv, err := control.NewServer(s.cfg.SocketPath(), s.pool)
+	controlSrv, err := control.NewServer(s.cfg.SocketPath(), s.pool, s.cfg, s.executor)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not start control socket: %v\n", err)
 	} else {

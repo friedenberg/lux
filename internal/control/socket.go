@@ -11,18 +11,22 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/subprocess"
+	"github.com/amarbel-llc/lux/internal/warmup"
 )
 
 type Server struct {
 	path     string
 	pool     *subprocess.Pool
+	cfg      *config.Config
+	executor subprocess.Executor
 	listener net.Listener
 	mu       sync.Mutex
 	closed   bool
 }
 
-func NewServer(path string, pool *subprocess.Pool) (*Server, error) {
+func NewServer(path string, pool *subprocess.Pool, cfg *config.Config, executor subprocess.Executor) (*Server, error) {
 	os.Remove(path)
 
 	listener, err := net.Listen("unix", path)
@@ -33,6 +37,8 @@ func NewServer(path string, pool *subprocess.Pool) (*Server, error) {
 	return &Server{
 		path:     path,
 		pool:     pool,
+		cfg:      cfg,
+		executor: executor,
 		listener: listener,
 	}, nil
 }
@@ -103,6 +109,11 @@ func (s *Server) handleCommand(line string) string {
 			return `{"error": "stop requires LSP name"}`
 		}
 		return s.handleStop(args[0])
+	case "warmup":
+		if len(args) < 1 {
+			return `{"error": "warmup requires directory path"}`
+		}
+		return s.handleWarmup(args[0])
 	default:
 		return fmt.Sprintf(`{"error": "unknown command: %s"}`, cmd)
 	}
@@ -146,6 +157,15 @@ func (s *Server) handleStop(name string) string {
 	if err := s.pool.Stop(name); err != nil {
 		return fmt.Sprintf(`{"error": "%s"}`, err.Error())
 	}
+	return `{"ok": true}`
+}
+
+func (s *Server) handleWarmup(dir string) string {
+	go func() {
+		scanner := warmup.NewScanner(s.cfg)
+		initParams := warmup.SynthesizeInitParams(dir)
+		warmup.StartRelevantLSPs(context.Background(), s.pool, scanner, []string{dir}, initParams, s.cfg)
+	}()
 	return `{"ok": true}`
 }
 
@@ -236,5 +256,10 @@ func (c *Client) Start(name string) error {
 
 func (c *Client) Stop(name string) error {
 	_, err := c.sendCommand("stop " + name)
+	return err
+}
+
+func (c *Client) Warmup(dir string) error {
+	_, err := c.sendCommand("warmup " + dir)
 	return err
 }

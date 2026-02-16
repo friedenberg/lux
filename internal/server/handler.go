@@ -12,6 +12,7 @@ import (
 	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/subprocess"
+	"github.com/amarbel-llc/lux/internal/warmup"
 )
 
 type Handler struct {
@@ -70,6 +71,12 @@ func (h *Handler) handleInitialize(ctx context.Context, msg *jsonrpc.Message) (*
 	h.server.initialized = true
 	h.server.mu.Unlock()
 
+	go func() {
+		dirs := extractWorkspaceDirs(&params)
+		scanner := warmup.NewScanner(h.server.cfg)
+		warmup.StartRelevantLSPs(context.Background(), h.server.pool, scanner, dirs, &params, h.server.cfg)
+	}()
+
 	capabilities := h.server.aggregateCapabilities()
 
 	result := lsp.InitializeResult{
@@ -96,6 +103,46 @@ func (h *Handler) handleExit() {
 func (h *Handler) handleDefault(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
 	if strings.HasPrefix(msg.Method, "$/") {
 		return nil, nil
+	}
+
+	if msg.Method == lsp.MethodTextDocumentDidOpen {
+		h.server.warmupOnce.Do(func() {
+			go func() {
+				h.server.mu.RLock()
+				initParams := h.server.initParams
+				cfg := h.server.cfg
+				h.server.mu.RUnlock()
+
+				if initParams == nil {
+					return
+				}
+
+				dirs := extractWorkspaceDirs(initParams)
+				scanner := warmup.NewScanner(cfg)
+				warmup.StartRelevantLSPs(context.Background(), h.server.pool, scanner, dirs, initParams, cfg)
+			}()
+		})
+	}
+
+	if msg.Method == lsp.MethodWorkspaceDidChangeFolders {
+		var folderParams lsp.DidChangeWorkspaceFoldersParams
+		if err := json.Unmarshal(msg.Params, &folderParams); err == nil && len(folderParams.Event.Added) > 0 {
+			go func() {
+				h.server.mu.RLock()
+				initParams := h.server.initParams
+				cfg := h.server.cfg
+				h.server.mu.RUnlock()
+
+				var dirs []string
+				for _, folder := range folderParams.Event.Added {
+					dirs = append(dirs, folder.URI.Path())
+				}
+
+				scanner := warmup.NewScanner(cfg)
+				warmup.StartRelevantLSPs(context.Background(), h.server.pool, scanner, dirs, initParams, cfg)
+			}()
+		}
+		// Still broadcast to running LSPs below
 	}
 
 	if msg.Method == lsp.MethodTextDocumentFormatting || msg.Method == lsp.MethodTextDocumentRangeFormatting {
@@ -194,6 +241,17 @@ func (h *Handler) tryExternalFormat(ctx context.Context, msg *jsonrpc.Message) (
 
 	resp, _ := jsonrpc.NewResponse(*msg.ID, []lsp.TextEdit{edit})
 	return resp, true
+}
+
+func extractWorkspaceDirs(params *lsp.InitializeParams) []string {
+	var dirs []string
+	for _, folder := range params.WorkspaceFolders {
+		dirs = append(dirs, folder.URI.Path())
+	}
+	if len(dirs) == 0 && params.RootURI != nil {
+		dirs = append(dirs, params.RootURI.Path())
+	}
+	return dirs
 }
 
 func (h *Handler) forwardServerNotification(lspName string, msg *jsonrpc.Message) {

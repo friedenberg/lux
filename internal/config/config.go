@@ -32,6 +32,7 @@ type LSP struct {
 	WaitForReady    *bool               `toml:"wait_for_ready,omitempty"`
 	ReadyTimeout    string              `toml:"ready_timeout,omitempty"`
 	ActivityTimeout string              `toml:"activity_timeout,omitempty"`
+	EagerStart      *bool               `toml:"eager_start,omitempty"`
 }
 
 type CapabilityOverride struct {
@@ -186,6 +187,13 @@ func (l *LSP) ReadyTimeoutDuration() time.Duration {
 		return 10 * time.Minute
 	}
 	return d
+}
+
+func (l *LSP) ShouldEagerStart() bool {
+	if l.EagerStart == nil {
+		return false
+	}
+	return *l.EagerStart
 }
 
 func (l *LSP) ActivityTimeoutDuration() time.Duration {
