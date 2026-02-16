@@ -492,6 +492,9 @@ func (b *Bridge) defaultInitParams(uri lsp.DocumentURI) *lsp.InitializeParams {
 				Rename:             &lsp.RenameClientCaps{},
 				PublishDiagnostics: &lsp.PublishDiagnosticsClientCaps{},
 			},
+			Window: &lsp.WindowClientCapabilities{
+				WorkDoneProgress: true,
+			},
 		},
 		WorkspaceFolders: []lsp.WorkspaceFolder{
 			{

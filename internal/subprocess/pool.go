@@ -192,6 +192,10 @@ func (p *Pool) GetOrStart(ctx context.Context, name string, initParams *lsp.Init
 	if initParams != nil {
 		// Merge LSP-specific init options into params
 		customParams := *initParams
+		if customParams.Capabilities.Window == nil {
+			customParams.Capabilities.Window = &lsp.WindowClientCapabilities{}
+		}
+		customParams.Capabilities.Window.WorkDoneProgress = true
 		if len(inst.InitOptions) > 0 {
 			customParams.InitializationOptions = mergeInitOptionsToJSON(
 				initParams.InitializationOptions,

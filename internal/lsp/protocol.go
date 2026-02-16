@@ -512,3 +512,14 @@ type TextEdit struct {
 	Range   Range  `json:"range"`
 	NewText string `json:"newText"`
 }
+
+// WorkDoneProgressCreateParams is sent by the server to create a progress token.
+type WorkDoneProgressCreateParams struct {
+	Token any `json:"token"` // string | number
+}
+
+// ProgressParams wraps the $/progress notification.
+type ProgressParams struct {
+	Token any             `json:"token"` // string | number
+	Value json.RawMessage `json:"value"`
+}

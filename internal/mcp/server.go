@@ -48,7 +48,7 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 
 	executor := subprocess.NewNixExecutor()
 	s.pool = subprocess.NewPool(executor, func(lspName string) jsonrpc.Handler {
-		return s.lspNotificationHandler()
+		return s.lspNotificationHandler(lspName)
 	})
 
 	for _, l := range cfg.LSPs {
@@ -151,8 +151,42 @@ func (s *Server) DocumentManager() *DocumentManager {
 	return s.docMgr
 }
 
-func (s *Server) lspNotificationHandler() jsonrpc.Handler {
+func (s *Server) lspNotificationHandler(lspName string) jsonrpc.Handler {
 	return func(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
+		// Intercept window/workDoneProgress/create requests
+		if msg.IsRequest() && msg.Method == lsp.MethodWindowWorkDoneProgressCreate {
+			if inst, ok := s.pool.Get(lspName); ok && inst.Progress != nil {
+				var params lsp.WorkDoneProgressCreateParams
+				if err := json.Unmarshal(msg.Params, &params); err == nil {
+					inst.Progress.HandleCreate(params.Token)
+				}
+			}
+			return jsonrpc.NewResponse(*msg.ID, nil)
+		}
+
+		// Intercept $/progress notifications — update tracker, log to stderr
+		if msg.IsNotification() && msg.Method == lsp.MethodProgress {
+			if inst, ok := s.pool.Get(lspName); ok && inst.Progress != nil {
+				var params lsp.ProgressParams
+				if err := json.Unmarshal(msg.Params, &params); err == nil {
+					inst.Progress.HandleProgress(params.Token, params.Value)
+
+					active := inst.Progress.ActiveProgress()
+					for _, tok := range active {
+						logMsg := tok.Title
+						if tok.Message != "" {
+							logMsg += ": " + tok.Message
+						}
+						if tok.Pct != nil {
+							logMsg += fmt.Sprintf(" (%d%%)", *tok.Pct)
+						}
+						fmt.Fprintf(os.Stderr, "[lux] %s: %s\n", lspName, logMsg)
+					}
+				}
+			}
+			return nil, nil
+		}
+
 		if msg.Method == "textDocument/publishDiagnostics" && msg.Params != nil {
 			var params lsp.PublishDiagnosticsParams
 			if err := json.Unmarshal(msg.Params, &params); err != nil {

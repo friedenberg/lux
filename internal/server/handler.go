@@ -204,6 +204,28 @@ func (h *Handler) forwardServerNotification(lspName string, msg *jsonrpc.Message
 
 func serverNotificationHandler(s *Server, lspName string) jsonrpc.Handler {
 	return func(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
+		// Intercept window/workDoneProgress/create requests
+		if msg.IsRequest() && msg.Method == lsp.MethodWindowWorkDoneProgressCreate {
+			if inst, ok := s.pool.Get(lspName); ok && inst.Progress != nil {
+				var params lsp.WorkDoneProgressCreateParams
+				if err := json.Unmarshal(msg.Params, &params); err == nil {
+					inst.Progress.HandleCreate(params.Token)
+				}
+			}
+			return jsonrpc.NewResponse(*msg.ID, nil)
+		}
+
+		// Intercept $/progress notifications — update tracker, then forward
+		if msg.IsNotification() && msg.Method == lsp.MethodProgress {
+			if inst, ok := s.pool.Get(lspName); ok && inst.Progress != nil {
+				var params lsp.ProgressParams
+				if err := json.Unmarshal(msg.Params, &params); err == nil {
+					inst.Progress.HandleProgress(params.Token, params.Value)
+				}
+			}
+			// Fall through to forward to client
+		}
+
 		if msg.IsNotification() {
 			if s.clientConn != nil {
 				s.clientConn.Notify(msg.Method, msg.Params)
@@ -211,7 +233,6 @@ func serverNotificationHandler(s *Server, lspName string) jsonrpc.Handler {
 		}
 
 		if msg.IsRequest() {
-			// Intercept workspace/configuration requests from backend LSPs
 			if msg.Method == lsp.MethodWorkspaceConfiguration {
 				return handleWorkspaceConfiguration(s, lspName, msg)
 			}
