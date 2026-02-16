@@ -1,10 +1,18 @@
 package subprocess
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
+)
+
+var (
+	ErrActivityTimeout = errors.New("LSP progress stalled: no activity within timeout")
+	ErrHardTimeout     = errors.New("LSP progress exceeded maximum wait time")
+	ErrInstanceFailed  = errors.New("LSP instance failed during progress wait")
 )
 
 type ProgressTracker struct {
@@ -146,4 +154,37 @@ func (pt *ProgressTracker) ActiveProgress() []ProgressToken {
 		result = append(result, cp)
 	}
 	return result
+}
+
+func (pt *ProgressTracker) WaitForReady(ctx context.Context, activityTimeout, hardTimeout time.Duration, isFailedFn func() bool) error {
+	if pt.IsReady() {
+		return nil
+	}
+
+	deadline := time.Now().Add(hardTimeout)
+	pollInterval := 250 * time.Millisecond
+
+	for {
+		readyCh := pt.ReadyCh()
+
+		select {
+		case <-readyCh:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(pollInterval):
+		}
+
+		if isFailedFn != nil && isFailedFn() {
+			return ErrInstanceFailed
+		}
+
+		if time.Now().After(deadline) {
+			return ErrHardTimeout
+		}
+
+		if time.Since(pt.LastActivity()) > activityTimeout {
+			return ErrActivityTimeout
+		}
+	}
 }

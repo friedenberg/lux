@@ -1,7 +1,9 @@
 package subprocess
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 )
@@ -124,6 +126,156 @@ func TestProgressTracker_NumericTokenID(t *testing.T) {
 	pt.HandleProgress(json.Number("42"), progressValue(t, "end", "", "", nil))
 	if !pt.IsReady() {
 		t.Error("should be ready after end with numeric token")
+	}
+}
+
+func TestProgressTracker_WaitForReady_AlreadyReady(t *testing.T) {
+	pt := NewProgressTracker()
+	ctx := context.Background()
+	err := pt.WaitForReady(ctx, 30*time.Second, 10*time.Minute, nil)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestProgressTracker_WaitForReady_UnblocksOnEnd(t *testing.T) {
+	pt := NewProgressTracker()
+	pt.HandleCreate("token-1")
+	pt.HandleProgress("token-1", progressValue(t, "begin", "Loading", "", nil))
+
+	ctx := context.Background()
+	done := make(chan error, 1)
+	go func() {
+		done <- pt.WaitForReady(ctx, 5*time.Second, 10*time.Second, nil)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	pt.HandleProgress("token-1", progressValue(t, "end", "", "", nil))
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForReady did not return after token ended")
+	}
+}
+
+func TestProgressTracker_WaitForReady_ActivityTimeout(t *testing.T) {
+	pt := NewProgressTracker()
+	pt.HandleCreate("token-1")
+	pt.HandleProgress("token-1", progressValue(t, "begin", "Loading", "", nil))
+
+	ctx := context.Background()
+	done := make(chan error, 1)
+	go func() {
+		done <- pt.WaitForReady(ctx, 100*time.Millisecond, 10*time.Second, nil)
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected activity timeout error")
+		}
+		if !errors.Is(err, ErrActivityTimeout) {
+			t.Errorf("expected ErrActivityTimeout, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForReady did not return on activity timeout")
+	}
+}
+
+func TestProgressTracker_WaitForReady_HardTimeout(t *testing.T) {
+	pt := NewProgressTracker()
+	pt.HandleCreate("token-1")
+	pt.HandleProgress("token-1", progressValue(t, "begin", "Loading", "", nil))
+
+	ctx := context.Background()
+	done := make(chan error, 1)
+
+	stop := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			case <-time.After(20 * time.Millisecond):
+				pt.HandleProgress("token-1", progressValue(t, "report", "", "working", nil))
+			}
+		}
+	}()
+
+	go func() {
+		done <- pt.WaitForReady(ctx, 5*time.Second, 200*time.Millisecond, nil)
+	}()
+
+	select {
+	case err := <-done:
+		close(stop)
+		if err == nil {
+			t.Fatal("expected hard timeout error")
+		}
+		if !errors.Is(err, ErrHardTimeout) {
+			t.Errorf("expected ErrHardTimeout, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		close(stop)
+		t.Fatal("WaitForReady did not return on hard timeout")
+	}
+}
+
+func TestProgressTracker_WaitForReady_ContextCancelled(t *testing.T) {
+	pt := NewProgressTracker()
+	pt.HandleCreate("token-1")
+	pt.HandleProgress("token-1", progressValue(t, "begin", "Loading", "", nil))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- pt.WaitForReady(ctx, 5*time.Second, 10*time.Second, nil)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForReady did not return on context cancel")
+	}
+}
+
+func TestProgressTracker_WaitForReady_InstanceStateCheck(t *testing.T) {
+	pt := NewProgressTracker()
+	pt.HandleCreate("token-1")
+	pt.HandleProgress("token-1", progressValue(t, "begin", "Loading", "", nil))
+
+	ctx := context.Background()
+	failed := false
+	stateCheck := func() bool { return failed }
+
+	done := make(chan error, 1)
+	go func() {
+		done <- pt.WaitForReady(ctx, 5*time.Second, 10*time.Second, stateCheck)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	failed = true
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected error when instance failed")
+		}
+		if !errors.Is(err, ErrInstanceFailed) {
+			t.Errorf("expected ErrInstanceFailed, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForReady did not return on instance failure")
 	}
 }
 
