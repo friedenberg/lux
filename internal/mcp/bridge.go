@@ -49,8 +49,8 @@ func isRetryableLSPError(err error) bool {
 }
 
 func (b *Bridge) callWithRetry(ctx context.Context, inst *subprocess.LSPInstance, fn func(*subprocess.LSPInstance) (json.RawMessage, error)) (json.RawMessage, error) {
-	const maxAttempts = 5
-	delay := 200 * time.Millisecond
+	const maxAttempts = 8
+	delay := 500 * time.Millisecond
 
 	for attempt := 1; ; attempt++ {
 		result, err := fn(inst)
@@ -67,8 +67,8 @@ func (b *Bridge) callWithRetry(ctx context.Context, inst *subprocess.LSPInstance
 		}
 
 		delay *= 2
-		if delay > 2*time.Second {
-			delay = 2 * time.Second
+		if delay > 5*time.Second {
+			delay = 5 * time.Second
 		}
 	}
 }
