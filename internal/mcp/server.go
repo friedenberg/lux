@@ -75,7 +75,15 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 		}
 	}
 
-	s.bridge = NewBridge(s.pool, s.router, fmtRouter, executor)
+	s.bridge = NewBridge(s.pool, s.router, fmtRouter, executor, func(lspName, message string) {
+		notification, err := jsonrpc.NewNotification("notifications/message", map[string]any{
+			"level": "info",
+			"data":  fmt.Sprintf("%s: %s", lspName, message),
+		})
+		if err == nil {
+			s.transport.Write(notification)
+		}
+	})
 	s.docMgr = NewDocumentManager(s.pool, s.router, s.bridge)
 	s.bridge.SetDocumentManager(s.docMgr)
 	s.diagStore = NewDiagnosticsStore()

@@ -20,24 +20,67 @@ import (
 )
 
 type Bridge struct {
-	pool      *subprocess.Pool
-	router    *server.Router
-	fmtRouter *formatter.Router
-	executor  subprocess.Executor
-	docMgr    *DocumentManager
+	pool             *subprocess.Pool
+	router           *server.Router
+	fmtRouter        *formatter.Router
+	executor         subprocess.Executor
+	docMgr           *DocumentManager
+	progressReporter func(lspName, message string)
 }
 
-func NewBridge(pool *subprocess.Pool, router *server.Router, fmtRouter *formatter.Router, executor subprocess.Executor) *Bridge {
+func NewBridge(pool *subprocess.Pool, router *server.Router, fmtRouter *formatter.Router, executor subprocess.Executor, progressReporter func(lspName, message string)) *Bridge {
 	return &Bridge{
-		pool:      pool,
-		router:    router,
-		fmtRouter: fmtRouter,
-		executor:  executor,
+		pool:             pool,
+		router:           router,
+		fmtRouter:        fmtRouter,
+		executor:         executor,
+		progressReporter: progressReporter,
 	}
 }
 
 func (b *Bridge) SetDocumentManager(dm *DocumentManager) {
 	b.docMgr = dm
+}
+
+func (b *Bridge) waitForLSPReady(ctx context.Context, inst *subprocess.LSPInstance) error {
+	if !inst.WaitForReady || inst.Progress == nil || inst.Progress.IsReady() {
+		return nil
+	}
+
+	fmt.Fprintf(os.Stderr, "[lux] %s: waiting for LSP to finish indexing...\n", inst.Name)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- inst.Progress.WaitForReady(ctx, inst.ActivityTimeout, inst.ReadyTimeout, inst.IsFailed)
+	}()
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case err := <-done:
+			if err == nil {
+				fmt.Fprintf(os.Stderr, "[lux] %s: LSP ready\n", inst.Name)
+			}
+			return err
+		case <-ticker.C:
+			active := inst.Progress.ActiveProgress()
+			for _, tok := range active {
+				logMsg := tok.Title
+				if tok.Message != "" {
+					logMsg += ": " + tok.Message
+				}
+				if tok.Pct != nil {
+					logMsg += fmt.Sprintf(" (%d%%)", *tok.Pct)
+				}
+				fmt.Fprintf(os.Stderr, "[lux] %s: %s\n", inst.Name, logMsg)
+				if b.progressReporter != nil {
+					b.progressReporter(inst.Name, logMsg)
+				}
+			}
+		}
+	}
 }
 
 func isRetryableLSPError(err error) bool {
@@ -83,6 +126,11 @@ func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(
 	inst, err := b.pool.GetOrStart(ctx, lspName, initParams)
 	if err != nil {
 		return nil, fmt.Errorf("starting LSP %s: %w", lspName, err)
+	}
+
+	// Wait for LSP to finish indexing before making calls
+	if err := b.waitForLSPReady(ctx, inst); err != nil {
+		return nil, fmt.Errorf("waiting for LSP %s readiness: %w", lspName, err)
 	}
 
 	projectRoot := b.projectRootForPath(uri.Path())

@@ -383,6 +383,12 @@ func (inst *LSPInstance) Notify(method string, params any) error {
 	return inst.Conn.Notify(method, params)
 }
 
+func (inst *LSPInstance) IsFailed() bool {
+	inst.mu.RLock()
+	defer inst.mu.RUnlock()
+	return inst.State == LSPStateFailed
+}
+
 func (inst *LSPInstance) EnsureWorkspaceFolder(projectRoot string) error {
 	inst.mu.Lock()
 	defer inst.mu.Unlock()
