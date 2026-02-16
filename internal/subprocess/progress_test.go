@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -118,12 +119,13 @@ func TestProgressTracker_EndUnknownTokenIsNoop(t *testing.T) {
 
 func TestProgressTracker_NumericTokenID(t *testing.T) {
 	pt := NewProgressTracker()
-	pt.HandleCreate(json.Number("42"))
+	// json.Unmarshal into any produces float64 for numbers
+	pt.HandleCreate(float64(42))
 	if pt.IsReady() {
 		t.Error("should not be ready after create with numeric token")
 	}
-	pt.HandleProgress(json.Number("42"), progressValue(t, "begin", "Task", "", nil))
-	pt.HandleProgress(json.Number("42"), progressValue(t, "end", "", "", nil))
+	pt.HandleProgress(float64(42), progressValue(t, "begin", "Task", "", nil))
+	pt.HandleProgress(float64(42), progressValue(t, "end", "", "", nil))
 	if !pt.IsReady() {
 		t.Error("should be ready after end with numeric token")
 	}
@@ -255,8 +257,8 @@ func TestProgressTracker_WaitForReady_InstanceStateCheck(t *testing.T) {
 	pt.HandleProgress("token-1", progressValue(t, "begin", "Loading", "", nil))
 
 	ctx := context.Background()
-	failed := false
-	stateCheck := func() bool { return failed }
+	var failed atomic.Bool
+	stateCheck := func() bool { return failed.Load() }
 
 	done := make(chan error, 1)
 	go func() {
@@ -264,7 +266,7 @@ func TestProgressTracker_WaitForReady_InstanceStateCheck(t *testing.T) {
 	}()
 
 	time.Sleep(50 * time.Millisecond)
-	failed = true
+	failed.Store(true)
 
 	select {
 	case err := <-done:

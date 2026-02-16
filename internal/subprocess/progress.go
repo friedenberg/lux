@@ -162,7 +162,8 @@ func (pt *ProgressTracker) WaitForReady(ctx context.Context, activityTimeout, ha
 	}
 
 	deadline := time.Now().Add(hardTimeout)
-	pollInterval := 250 * time.Millisecond
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
 
 	for {
 		readyCh := pt.ReadyCh()
@@ -172,7 +173,7 @@ func (pt *ProgressTracker) WaitForReady(ctx context.Context, activityTimeout, ha
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(pollInterval):
+		case <-ticker.C:
 		}
 
 		if isFailedFn != nil && isFailedFn() {
