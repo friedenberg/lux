@@ -57,7 +57,7 @@ func New(cfg *config.Config) (*Server, error) {
 				Enable:  l.Capabilities.Enable,
 			}
 		}
-		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, l.Settings, l.SettingsWireKey(), capOverrides)
+		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, l.Settings, l.SettingsWireKey(), capOverrides, l.ShouldWaitForReady(), l.ReadyTimeoutDuration(), l.ActivityTimeoutDuration())
 	}
 
 	fmtCfg, err := config.LoadMergedFormatters()
@@ -140,7 +140,7 @@ func (s *Server) reloadPool(cfg *config.Config) error {
 				Enable:  l.Capabilities.Enable,
 			}
 		}
-		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, l.Settings, l.SettingsWireKey(), capOverrides)
+		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, l.Settings, l.SettingsWireKey(), capOverrides, l.ShouldWaitForReady(), l.ReadyTimeoutDuration(), l.ActivityTimeoutDuration())
 	}
 
 	return nil

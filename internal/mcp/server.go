@@ -60,7 +60,7 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 				Enable:  l.Capabilities.Enable,
 			}
 		}
-		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, l.Settings, l.SettingsWireKey(), capOverrides)
+		s.pool.Register(l.Name, l.Flake, l.Binary, l.Args, l.Env, l.InitOptions, l.Settings, l.SettingsWireKey(), capOverrides, l.ShouldWaitForReady(), l.ReadyTimeoutDuration(), l.ActivityTimeoutDuration())
 	}
 
 	var fmtRouter *formatter.Router

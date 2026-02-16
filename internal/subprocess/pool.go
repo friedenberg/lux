@@ -51,13 +51,17 @@ type LSPInstance struct {
 	InitOptions  map[string]any
 	Settings     map[string]any
 	SettingsKey  string
-	CapOverrides *CapabilityOverride
-	State        LSPState
-	Process      *Process
-	Conn         *jsonrpc.Conn
-	Capabilities *lsp.ServerCapabilities
-	StartedAt    time.Time
-	Error        error
+	CapOverrides    *CapabilityOverride
+	State           LSPState
+	Process         *Process
+	Conn            *jsonrpc.Conn
+	Capabilities    *lsp.ServerCapabilities
+	StartedAt       time.Time
+	Error           error
+	Progress        *ProgressTracker
+	WaitForReady    bool
+	ReadyTimeout    time.Duration
+	ActivityTimeout time.Duration
 
 	knownFolders map[string]bool
 	mu           sync.RWMutex
@@ -88,21 +92,24 @@ func NewPool(executor Executor, handlerFactory HandlerFactory) *Pool {
 	}
 }
 
-func (p *Pool) Register(name, flake, binary string, args []string, env map[string]string, initOpts map[string]any, settings map[string]any, settingsKey string, capOverrides *CapabilityOverride) {
+func (p *Pool) Register(name, flake, binary string, args []string, env map[string]string, initOpts map[string]any, settings map[string]any, settingsKey string, capOverrides *CapabilityOverride, waitForReady bool, readyTimeout, activityTimeout time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	p.instances[name] = &LSPInstance{
-		Name:         name,
-		Flake:        flake,
-		Binary:       binary,
-		Args:         args,
-		Env:          env,
-		InitOptions:  initOpts,
-		Settings:     settings,
-		SettingsKey:  settingsKey,
-		CapOverrides: capOverrides,
-		State:        LSPStateIdle,
+		Name:            name,
+		Flake:           flake,
+		Binary:          binary,
+		Args:            args,
+		Env:             env,
+		InitOptions:     initOpts,
+		Settings:        settings,
+		SettingsKey:     settingsKey,
+		CapOverrides:    capOverrides,
+		State:           LSPStateIdle,
+		WaitForReady:    waitForReady,
+		ReadyTimeout:    readyTimeout,
+		ActivityTimeout: activityTimeout,
 	}
 }
 
@@ -147,6 +154,7 @@ func (p *Pool) GetOrStart(ctx context.Context, name string, initParams *lsp.Init
 	}
 
 	inst.State = LSPStateStarting
+	inst.Progress = NewProgressTracker()
 	inst.ctx, inst.cancel = context.WithCancel(ctx)
 
 	binPath, err := p.executor.Build(inst.ctx, inst.Flake, inst.Binary)
