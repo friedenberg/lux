@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/amarbel-llc/go-lib-mcp/jsonrpc"
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/jsonrpc"
 )
 
 // DocumentLifecycle allows the SSE transport to delegate document open/close

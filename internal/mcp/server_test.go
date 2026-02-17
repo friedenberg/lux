@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/amarbel-llc/go-lib-mcp/jsonrpc"
-	"github.com/amarbel-llc/go-lib-mcp/protocol"
-	"github.com/amarbel-llc/go-lib-mcp/transport"
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/jsonrpc"
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/protocol"
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/transport"
 	"github.com/amarbel-llc/lux/internal/config"
 )
 

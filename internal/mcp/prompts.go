@@ -3,7 +3,7 @@ package mcp
 import (
 	"fmt"
 
-	"github.com/amarbel-llc/go-lib-mcp/protocol"
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/protocol"
 )
 
 const codeExplorationPrompt = `When exploring an unfamiliar codebase, use lux LSP tools strategically:

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/amarbel-llc/go-lib-mcp/protocol"
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/protocol"
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/subprocess"

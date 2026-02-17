@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/amarbel-llc/go-lib-mcp/jsonrpc"
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/jsonrpc"
 	"github.com/amarbel-llc/lux/internal/lsp"
 )
 

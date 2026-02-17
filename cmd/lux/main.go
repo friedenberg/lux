@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 
-	"github.com/amarbel-llc/go-lib-mcp/transport"
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/transport"
 	"github.com/amarbel-llc/lux/internal/capabilities"
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/control"
