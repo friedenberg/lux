@@ -15,6 +15,7 @@ import (
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/server"
 	"github.com/amarbel-llc/lux/internal/subprocess"
+	"github.com/amarbel-llc/lux/internal/tools"
 	"github.com/amarbel-llc/lux/internal/warmup"
 )
 
@@ -24,7 +25,7 @@ type Server struct {
 	handler    *Handler
 	pool       *subprocess.Pool
 	router     *server.Router
-	bridge     *Bridge
+	bridge     *tools.Bridge
 	docMgr     *DocumentManager
 	diagStore  *DiagnosticsStore
 	tools      *ToolRegistry
@@ -76,7 +77,7 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 		}
 	}
 
-	s.bridge = NewBridge(s.pool, s.router, fmtRouter, executor, func(lspName, message string) {
+	s.bridge = tools.NewBridge(s.pool, s.router, fmtRouter, executor, func(lspName, message string) {
 		notification, err := jsonrpc.NewNotification("notifications/message", map[string]any{
 			"level": "info",
 			"data":  fmt.Sprintf("%s: %s", lspName, message),

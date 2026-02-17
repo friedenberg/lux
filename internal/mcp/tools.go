@@ -7,6 +7,7 @@ import (
 
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/protocol"
 	"github.com/amarbel-llc/lux/internal/lsp"
+	"github.com/amarbel-llc/lux/internal/tools"
 )
 
 type ToolHandler func(ctx context.Context, args json.RawMessage) (*protocol.ToolCallResult, error)
@@ -14,10 +15,10 @@ type ToolHandler func(ctx context.Context, args json.RawMessage) (*protocol.Tool
 type ToolRegistry struct {
 	tools    []protocol.Tool
 	handlers map[string]ToolHandler
-	bridge   *Bridge
+	bridge   *tools.Bridge
 }
 
-func NewToolRegistry(bridge *Bridge) *ToolRegistry {
+func NewToolRegistry(bridge *tools.Bridge) *ToolRegistry {
 	r := &ToolRegistry{
 		handlers: make(map[string]ToolHandler),
 		bridge:   bridge,

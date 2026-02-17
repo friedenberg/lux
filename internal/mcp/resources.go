@@ -14,19 +14,20 @@ import (
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/subprocess"
+	"github.com/amarbel-llc/lux/internal/tools"
 	"github.com/amarbel-llc/lux/pkg/filematch"
 )
 
 type ResourceRegistry struct {
 	pool      *subprocess.Pool
-	bridge    *Bridge
+	bridge    *tools.Bridge
 	config    *config.Config
 	diagStore *DiagnosticsStore
 	cwd       string
 	matcher   *filematch.MatcherSet
 }
 
-func NewResourceRegistry(pool *subprocess.Pool, bridge *Bridge, cfg *config.Config, diagStore *DiagnosticsStore) *ResourceRegistry {
+func NewResourceRegistry(pool *subprocess.Pool, bridge *tools.Bridge, cfg *config.Config, diagStore *DiagnosticsStore) *ResourceRegistry {
 	cwd, _ := os.Getwd()
 
 	matcher := filematch.NewMatcherSet()
@@ -299,7 +300,7 @@ func (r *ResourceRegistry) readFiles() (*protocol.ResourceReadResult, error) {
 
 type symbolsResponse struct {
 	URI     string   `json:"uri"`
-	Symbols []Symbol `json:"symbols"`
+	Symbols []tools.Symbol `json:"symbols"`
 }
 
 func (r *ResourceRegistry) readSymbols(ctx context.Context, resourceURI, fileURI string) (*protocol.ResourceReadResult, error) {
