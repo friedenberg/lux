@@ -19,12 +19,18 @@ import (
 	"github.com/amarbel-llc/lux/internal/subprocess"
 )
 
+// DocumentTracker tracks open documents for persistent LSP sessions.
+type DocumentTracker interface {
+	IsOpen(uri lsp.DocumentURI) bool
+	Open(ctx context.Context, uri lsp.DocumentURI) error
+}
+
 type Bridge struct {
 	pool             *subprocess.Pool
 	router           *server.Router
 	fmtRouter        *formatter.Router
 	executor         subprocess.Executor
-	docMgr           *DocumentManager
+	docMgr           DocumentTracker
 	progressReporter func(lspName, message string)
 }
 
@@ -38,7 +44,7 @@ func NewBridge(pool *subprocess.Pool, router *server.Router, fmtRouter *formatte
 	}
 }
 
-func (b *Bridge) SetDocumentManager(dm *DocumentManager) {
+func (b *Bridge) SetDocumentManager(dm DocumentTracker) {
 	b.docMgr = dm
 }
 
@@ -122,7 +128,7 @@ func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(
 		return nil, fmt.Errorf("no LSP configured for %s", uri)
 	}
 
-	initParams := b.defaultInitParams(uri)
+	initParams := b.DefaultInitParams(uri)
 	inst, err := b.pool.GetOrStart(ctx, lspName, initParams)
 	if err != nil {
 		return nil, fmt.Errorf("starting LSP %s: %w", lspName, err)
@@ -133,7 +139,7 @@ func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(
 		return nil, fmt.Errorf("waiting for LSP %s readiness: %w", lspName, err)
 	}
 
-	projectRoot := b.projectRootForPath(uri.Path())
+	projectRoot := b.ProjectRootForPath(uri.Path())
 	if err := inst.EnsureWorkspaceFolder(projectRoot); err != nil {
 		return nil, fmt.Errorf("adding workspace folder: %w", err)
 	}
@@ -154,7 +160,7 @@ func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(
 		return nil, fmt.Errorf("reading file: %w", err)
 	}
 
-	langID := b.inferLanguageID(uri)
+	langID := b.InferLanguageID(uri)
 
 	if err := inst.Notify(lsp.MethodTextDocumentDidOpen, lsp.DidOpenTextDocumentParams{
 		TextDocument: lsp.TextDocumentItem{
@@ -503,7 +509,7 @@ func (b *Bridge) readFile(uri lsp.DocumentURI) (string, error) {
 	return string(content), nil
 }
 
-func (b *Bridge) projectRootForPath(path string) string {
+func (b *Bridge) ProjectRootForPath(path string) string {
 	root, err := config.FindProjectRoot(path)
 	if err != nil {
 		return filepath.Dir(path)
@@ -511,9 +517,9 @@ func (b *Bridge) projectRootForPath(path string) string {
 	return root
 }
 
-func (b *Bridge) defaultInitParams(uri lsp.DocumentURI) *lsp.InitializeParams {
+func (b *Bridge) DefaultInitParams(uri lsp.DocumentURI) *lsp.InitializeParams {
 	path := uri.Path()
-	rootPath := b.projectRootForPath(path)
+	rootPath := b.ProjectRootForPath(path)
 	rootURI := lsp.URIFromPath(rootPath)
 
 	pid := os.Getpid()
@@ -553,7 +559,7 @@ func (b *Bridge) defaultInitParams(uri lsp.DocumentURI) *lsp.InitializeParams {
 	}
 }
 
-func (b *Bridge) inferLanguageID(uri lsp.DocumentURI) string {
+func (b *Bridge) InferLanguageID(uri lsp.DocumentURI) string {
 	ext := uri.Extension()
 	switch ext {
 	case ".go":

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/protocol"
+	mcpserver "github.com/amarbel-llc/purse-first/libs/go-mcp/server"
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/subprocess"
@@ -18,16 +19,49 @@ import (
 	"github.com/amarbel-llc/lux/pkg/filematch"
 )
 
-type ResourceRegistry struct {
-	pool      *subprocess.Pool
+// resourceProvider wraps a ResourceRegistry to handle the symbols resource
+// template which uses prefix matching on URIs rather than exact lookup.
+type resourceProvider struct {
+	registry  *mcpserver.ResourceRegistry
 	bridge    *tools.Bridge
-	config    *config.Config
 	diagStore *DiagnosticsStore
-	cwd       string
-	matcher   *filematch.MatcherSet
 }
 
-func NewResourceRegistry(pool *subprocess.Pool, bridge *tools.Bridge, cfg *config.Config, diagStore *DiagnosticsStore) *ResourceRegistry {
+func newResourceProvider(registry *mcpserver.ResourceRegistry, bridge *tools.Bridge, diagStore *DiagnosticsStore) *resourceProvider {
+	return &resourceProvider{
+		registry:  registry,
+		bridge:    bridge,
+		diagStore: diagStore,
+	}
+}
+
+func (p *resourceProvider) ListResources(ctx context.Context) ([]protocol.Resource, error) {
+	return p.registry.ListResources(ctx)
+}
+
+func (p *resourceProvider) ReadResource(ctx context.Context, uri string) (*protocol.ResourceReadResult, error) {
+	if strings.HasPrefix(uri, "lux://symbols/") {
+		fileURI := strings.TrimPrefix(uri, "lux://symbols/")
+		return readSymbols(ctx, p.bridge, uri, fileURI)
+	}
+	if strings.HasPrefix(uri, "lux://diagnostics/") {
+		encodedURI := strings.TrimPrefix(uri, "lux://diagnostics/")
+		return readDiagnostics(p.diagStore, uri, encodedURI)
+	}
+	return p.registry.ReadResource(ctx, uri)
+}
+
+func (p *resourceProvider) ListResourceTemplates(ctx context.Context) ([]protocol.ResourceTemplate, error) {
+	return p.registry.ListResourceTemplates(ctx)
+}
+
+func registerResources(
+	registry *mcpserver.ResourceRegistry,
+	pool *subprocess.Pool,
+	bridge *tools.Bridge,
+	cfg *config.Config,
+	diagStore *DiagnosticsStore,
+) {
 	cwd, _ := os.Getwd()
 
 	matcher := filematch.NewMatcherSet()
@@ -35,75 +69,61 @@ func NewResourceRegistry(pool *subprocess.Pool, bridge *tools.Bridge, cfg *confi
 		matcher.Add(l.Name, l.Extensions, l.Patterns, l.LanguageIDs)
 	}
 
-	return &ResourceRegistry{
-		pool:      pool,
-		bridge:    bridge,
-		config:    cfg,
-		diagStore: diagStore,
-		cwd:       cwd,
-		matcher:   matcher,
-	}
-}
-
-func (r *ResourceRegistry) List() []protocol.Resource {
-	return []protocol.Resource{
-		{
+	registry.RegisterResource(
+		protocol.Resource{
 			URI:         "lux://status",
 			Name:        "LSP Status",
 			Description: "Current status of configured language servers including which are running",
 			MimeType:    "application/json",
 		},
-		{
+		func(ctx context.Context, uri string) (*protocol.ResourceReadResult, error) {
+			return readStatus(pool, cfg)
+		},
+	)
+
+	registry.RegisterResource(
+		protocol.Resource{
 			URI:         "lux://languages",
 			Name:        "Supported Languages",
 			Description: "Languages supported by lux with their file extensions and patterns",
 			MimeType:    "application/json",
 		},
-		{
+		func(ctx context.Context, uri string) (*protocol.ResourceReadResult, error) {
+			return readLanguages(cfg)
+		},
+	)
+
+	registry.RegisterResource(
+		protocol.Resource{
 			URI:         "lux://files",
 			Name:        "Project Files",
 			Description: "Files in the current directory that match configured LSP extensions/patterns",
 			MimeType:    "application/json",
 		},
-	}
-}
+		func(ctx context.Context, uri string) (*protocol.ResourceReadResult, error) {
+			return readFiles(cwd, matcher)
+		},
+	)
 
-func (r *ResourceRegistry) ListTemplates() []protocol.ResourceTemplate {
-	return []protocol.ResourceTemplate{
-		{
+	registry.RegisterTemplate(
+		protocol.ResourceTemplate{
 			URITemplate: "lux://symbols/{uri}",
 			Name:        "File Symbols",
 			Description: "All symbols (functions, types, constants, etc.) in a file as reported by the LSP. Use file:// URI encoding for the path (e.g., lux://symbols/file:///path/to/file.go)",
 			MimeType:    "application/json",
 		},
-		{
+		nil, // Template URIs are handled by the resourceProvider wrapper
+	)
+
+	registry.RegisterTemplate(
+		protocol.ResourceTemplate{
 			URITemplate: "lux://diagnostics/{uri}",
 			Name:        "File Diagnostics",
 			Description: "Push diagnostics (errors, warnings) for a file as reported by the LSP. Updated in real-time via resource subscriptions.",
 			MimeType:    "application/json",
 		},
-	}
-}
-
-func (r *ResourceRegistry) Read(ctx context.Context, uri string) (*protocol.ResourceReadResult, error) {
-	switch uri {
-	case "lux://status":
-		return r.readStatus()
-	case "lux://languages":
-		return r.readLanguages()
-	case "lux://files":
-		return r.readFiles()
-	default:
-		if strings.HasPrefix(uri, "lux://symbols/") {
-			fileURI := strings.TrimPrefix(uri, "lux://symbols/")
-			return r.readSymbols(ctx, uri, fileURI)
-		}
-		if strings.HasPrefix(uri, "lux://diagnostics/") {
-			encodedURI := strings.TrimPrefix(uri, "lux://diagnostics/")
-			return r.readDiagnostics(uri, encodedURI)
-		}
-		return nil, fmt.Errorf("unknown resource: %s", uri)
-	}
+		nil, // Template URIs are handled by the resourceProvider wrapper
+	)
 }
 
 type statusResponse struct {
@@ -120,8 +140,8 @@ type lspStatus struct {
 	State      string   `json:"state"`
 }
 
-func (r *ResourceRegistry) readStatus() (*protocol.ResourceReadResult, error) {
-	statuses := r.pool.Status()
+func readStatus(pool *subprocess.Pool, cfg *config.Config) (*protocol.ResourceReadResult, error) {
+	statuses := pool.Status()
 	statusMap := make(map[string]string)
 	for _, s := range statuses {
 		statusMap[s.Name] = s.State
@@ -131,7 +151,7 @@ func (r *ResourceRegistry) readStatus() (*protocol.ResourceReadResult, error) {
 	extSet := make(map[string]bool)
 	langSet := make(map[string]bool)
 
-	for _, l := range r.config.LSPs {
+	for _, l := range cfg.LSPs {
 		state := statusMap[l.Name]
 		if state == "" {
 			state = "idle"
@@ -192,10 +212,10 @@ type languageInfo struct {
 	Patterns   []string `json:"patterns,omitempty"`
 }
 
-func (r *ResourceRegistry) readLanguages() (*protocol.ResourceReadResult, error) {
+func readLanguages(cfg *config.Config) (*protocol.ResourceReadResult, error) {
 	resp := make(languagesResponse)
 
-	for _, l := range r.config.LSPs {
+	for _, l := range cfg.LSPs {
 		for _, langID := range l.LanguageIDs {
 			resp[langID] = languageInfo{
 				LSP:        l.Name,
@@ -239,11 +259,11 @@ type filesStats struct {
 	ByExtension map[string]int `json:"by_extension"`
 }
 
-func (r *ResourceRegistry) readFiles() (*protocol.ResourceReadResult, error) {
+func readFiles(cwd string, matcher *filematch.MatcherSet) (*protocol.ResourceReadResult, error) {
 	var files []string
 	byExt := make(map[string]int)
 
-	err := filepath.Walk(r.cwd, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(cwd, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -257,9 +277,9 @@ func (r *ResourceRegistry) readFiles() (*protocol.ResourceReadResult, error) {
 		}
 
 		ext := filepath.Ext(path)
-		relPath, _ := filepath.Rel(r.cwd, path)
+		relPath, _ := filepath.Rel(cwd, path)
 
-		if r.matcher.Match(relPath, ext, "") != "" {
+		if matcher.Match(relPath, ext, "") != "" {
 			files = append(files, relPath)
 			byExt[ext]++
 		}
@@ -274,7 +294,7 @@ func (r *ResourceRegistry) readFiles() (*protocol.ResourceReadResult, error) {
 	sort.Strings(files)
 
 	resp := filesResponse{
-		Root:  r.cwd,
+		Root:  cwd,
 		Files: files,
 		Stats: filesStats{
 			TotalFiles:  len(files),
@@ -299,12 +319,12 @@ func (r *ResourceRegistry) readFiles() (*protocol.ResourceReadResult, error) {
 }
 
 type symbolsResponse struct {
-	URI     string   `json:"uri"`
+	URI     string         `json:"uri"`
 	Symbols []tools.Symbol `json:"symbols"`
 }
 
-func (r *ResourceRegistry) readSymbols(ctx context.Context, resourceURI, fileURI string) (*protocol.ResourceReadResult, error) {
-	symbols, err := r.bridge.DocumentSymbolsRaw(ctx, lsp.DocumentURI(fileURI))
+func readSymbols(ctx context.Context, bridge *tools.Bridge, resourceURI, fileURI string) (*protocol.ResourceReadResult, error) {
+	symbols, err := bridge.DocumentSymbolsRaw(ctx, lsp.DocumentURI(fileURI))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get symbols: %w", err)
 	}
@@ -330,13 +350,13 @@ func (r *ResourceRegistry) readSymbols(ctx context.Context, resourceURI, fileURI
 	}, nil
 }
 
-func (r *ResourceRegistry) readDiagnostics(resourceURI, encodedFileURI string) (*protocol.ResourceReadResult, error) {
+func readDiagnostics(diagStore *DiagnosticsStore, resourceURI, encodedFileURI string) (*protocol.ResourceReadResult, error) {
 	fileURI, err := url.PathUnescape(encodedFileURI)
 	if err != nil {
 		return nil, fmt.Errorf("decoding URI: %w", err)
 	}
 
-	params, ok := r.diagStore.Get(lsp.DocumentURI(fileURI))
+	params, ok := diagStore.Get(lsp.DocumentURI(fileURI))
 	if !ok {
 		params = lsp.PublishDiagnosticsParams{
 			URI:         lsp.DocumentURI(fileURI),

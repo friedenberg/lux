@@ -9,6 +9,7 @@ import (
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/server"
 	"github.com/amarbel-llc/lux/internal/subprocess"
+	"github.com/amarbel-llc/lux/internal/tools"
 )
 
 type openDoc struct {
@@ -21,12 +22,12 @@ type openDoc struct {
 type DocumentManager struct {
 	pool   *subprocess.Pool
 	router *server.Router
-	bridge *Bridge
+	bridge *tools.Bridge
 	docs   map[lsp.DocumentURI]*openDoc
 	mu     sync.RWMutex
 }
 
-func NewDocumentManager(pool *subprocess.Pool, router *server.Router, bridge *Bridge) *DocumentManager {
+func NewDocumentManager(pool *subprocess.Pool, router *server.Router, bridge *tools.Bridge) *DocumentManager {
 	return &DocumentManager{
 		pool:   pool,
 		router: router,
@@ -46,18 +47,18 @@ func (dm *DocumentManager) Open(ctx context.Context, uri lsp.DocumentURI) error 
 		return fmt.Errorf("reading file: %w", err)
 	}
 
-	initParams := dm.bridge.defaultInitParams(uri)
+	initParams := dm.bridge.DefaultInitParams(uri)
 	inst, err := dm.pool.GetOrStart(ctx, lspName, initParams)
 	if err != nil {
 		return fmt.Errorf("starting LSP %s: %w", lspName, err)
 	}
 
-	projectRoot := dm.bridge.projectRootForPath(uri.Path())
+	projectRoot := dm.bridge.ProjectRootForPath(uri.Path())
 	if err := inst.EnsureWorkspaceFolder(projectRoot); err != nil {
 		return fmt.Errorf("adding workspace folder: %w", err)
 	}
 
-	langID := dm.bridge.inferLanguageID(uri)
+	langID := dm.bridge.InferLanguageID(uri)
 
 	dm.mu.Lock()
 	defer dm.mu.Unlock()

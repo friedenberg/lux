@@ -1,9 +1,10 @@
 package mcp
 
 import (
-	"fmt"
+	"context"
 
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/protocol"
+	mcpserver "github.com/amarbel-llc/purse-first/libs/go-mcp/server"
 )
 
 const codeExplorationPrompt = `When exploring an unfamiliar codebase, use lux LSP tools strategically:
@@ -55,60 +56,40 @@ Use code_action to discover automated fixes and refactorings available at a spec
 DIAGNOSTICS:
 Use diagnostics to check for errors and warnings before and after making changes.`
 
-type PromptRegistry struct {
-	prompts map[string]promptDef
-}
-
-type promptDef struct {
-	prompt  protocol.Prompt
-	content string
-}
-
-func NewPromptRegistry() *PromptRegistry {
-	r := &PromptRegistry{
-		prompts: make(map[string]promptDef),
-	}
-
-	r.prompts["code-exploration"] = promptDef{
-		prompt: protocol.Prompt{
+func registerPrompts(registry *mcpserver.PromptRegistry) {
+	registry.Register(
+		protocol.Prompt{
 			Name:        "code-exploration",
 			Description: "Best practices for exploring and understanding code using LSP tools",
 		},
-		content: codeExplorationPrompt,
-	}
+		func(ctx context.Context, args map[string]string) (*protocol.PromptGetResult, error) {
+			return &protocol.PromptGetResult{
+				Description: "Best practices for exploring and understanding code using LSP tools",
+				Messages: []protocol.PromptMessage{
+					{
+						Role:    "user",
+						Content: protocol.TextContent(codeExplorationPrompt),
+					},
+				},
+			}, nil
+		},
+	)
 
-	r.prompts["refactoring-guide"] = promptDef{
-		prompt: protocol.Prompt{
+	registry.Register(
+		protocol.Prompt{
 			Name:        "refactoring-guide",
 			Description: "How to safely refactor code using LSP-assisted tools",
 		},
-		content: refactoringGuidePrompt,
-	}
-
-	return r
-}
-
-func (r *PromptRegistry) List() []protocol.Prompt {
-	var result []protocol.Prompt
-	for _, p := range r.prompts {
-		result = append(result, p.prompt)
-	}
-	return result
-}
-
-func (r *PromptRegistry) Get(name string, args map[string]string) (*protocol.PromptGetResult, error) {
-	def, ok := r.prompts[name]
-	if !ok {
-		return nil, fmt.Errorf("unknown prompt: %s", name)
-	}
-
-	return &protocol.PromptGetResult{
-		Description: def.prompt.Description,
-		Messages: []protocol.PromptMessage{
-			{
-				Role:    "user",
-				Content: protocol.TextContent(def.content),
-			},
+		func(ctx context.Context, args map[string]string) (*protocol.PromptGetResult, error) {
+			return &protocol.PromptGetResult{
+				Description: "How to safely refactor code using LSP-assisted tools",
+				Messages: []protocol.PromptMessage{
+					{
+						Role:    "user",
+						Content: protocol.TextContent(refactoringGuidePrompt),
+					},
+				},
+			}, nil
 		},
-	}, nil
+	)
 }
