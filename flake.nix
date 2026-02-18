@@ -55,6 +55,7 @@
             $out/bin/lux generate-plugin $out/share/purse-first
           '';
 
+
           meta = with pkgs.lib; {
             description = "LSP Multiplexer that routes requests to language servers based on file type";
             homepage = "https://github.com/amarbel-llc/lux";
