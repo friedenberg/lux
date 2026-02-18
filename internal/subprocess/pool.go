@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"sync"
 	"time"
@@ -449,7 +450,7 @@ func mergeInitOptionsToJSON(existing json.RawMessage, custom map[string]any) jso
 		return existing
 	}
 
-	if existing == nil || len(existing) == 0 {
+	if len(existing) == 0 {
 		data, _ := json.Marshal(custom)
 		return data
 	}
@@ -461,10 +462,7 @@ func mergeInitOptionsToJSON(existing json.RawMessage, custom map[string]any) jso
 		return data
 	}
 
-	// Merge custom over existing
-	for k, v := range custom {
-		existingMap[k] = v
-	}
+	maps.Copy(existingMap, custom)
 
 	data, _ := json.Marshal(existingMap)
 	return data

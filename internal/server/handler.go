@@ -11,7 +11,6 @@ import (
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/lsp"
-	"github.com/amarbel-llc/lux/internal/subprocess"
 	"github.com/amarbel-llc/lux/internal/warmup"
 )
 
@@ -39,7 +38,7 @@ func (h *Handler) Handle(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Me
 	}
 }
 
-func (h *Handler) handleInitialize(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
+func (h *Handler) handleInitialize(_ context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
 	var params lsp.InitializeParams
 	if err := json.Unmarshal(msg.Params, &params); err != nil {
 		return jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InvalidParams, "invalid params", nil)
@@ -90,7 +89,7 @@ func (h *Handler) handleInitialize(ctx context.Context, msg *jsonrpc.Message) (*
 	return jsonrpc.NewResponse(*msg.ID, result)
 }
 
-func (h *Handler) handleShutdown(ctx context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
+func (h *Handler) handleShutdown(_ context.Context, msg *jsonrpc.Message) (*jsonrpc.Message, error) {
 	h.server.pool.StopAll()
 	return jsonrpc.NewResponse(*msg.ID, nil)
 }
@@ -155,7 +154,7 @@ func (h *Handler) handleDefault(ctx context.Context, msg *jsonrpc.Message) (*jso
 	if lspName == "" {
 		if msg.IsRequest() {
 			return jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.MethodNotFound,
-				fmt.Sprintf("no LSP configured for this file type"), nil)
+				"no LSP configured for this file type", nil)
 		}
 		return nil, nil
 	}
@@ -252,12 +251,6 @@ func extractWorkspaceDirs(params *lsp.InitializeParams) []string {
 		dirs = append(dirs, params.RootURI.Path())
 	}
 	return dirs
-}
-
-func (h *Handler) forwardServerNotification(lspName string, msg *jsonrpc.Message) {
-	if h.server.clientConn != nil {
-		h.server.clientConn.Notify(msg.Method, msg.Params)
-	}
 }
 
 func serverNotificationHandler(s *Server, lspName string) jsonrpc.Handler {
@@ -433,28 +426,3 @@ func loadCapabilityCache(name string) (*CachedCapabilities, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (s *Server) routeToAllLSPs(ctx context.Context, method string, params any) error {
-	s.mu.RLock()
-	initParams := s.initParams
-	s.mu.RUnlock()
-
-	for _, lspCfg := range s.cfg.LSPs {
-		inst, err := s.pool.GetOrStart(ctx, lspCfg.Name, initParams)
-		if err != nil {
-			continue
-		}
-		inst.Notify(method, params)
-	}
-
-	return nil
-}
-
-func (s *Server) broadcastToRunning(method string, params any) {
-	for _, status := range s.pool.Status() {
-		if status.State == subprocess.LSPStateRunning.String() {
-			if inst, ok := s.pool.Get(status.Name); ok {
-				inst.Notify(method, params)
-			}
-		}
-	}
-}
