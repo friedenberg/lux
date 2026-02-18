@@ -9,6 +9,10 @@ schema = 3
     version = 'v0.0.0-20260217222858-cd512e5ef8b7'
     hash = 'sha256-S7j8n/4sc6fDWFBnpbNJqfx4LgN+X0fT4eaTT2Ex2DY='
 
+  [mod.'github.com/cpuguy83/go-md2man/v2']
+    version = 'v2.0.6'
+    hash = 'sha256-wJnHgp+NPchXkR71ARLMjo4VryzgGkz2tYWPsC+3eFo='
+
   [mod.'github.com/gobwas/glob']
     version = 'v0.2.3'
     hash = 'sha256-hYHMUdwxVkMOjSKjR7UWO0D0juHdI4wL8JEy5plu/Jc='
@@ -17,10 +21,18 @@ schema = 3
     version = 'v1.1.0'
     hash = 'sha256-XWlYH0c8IcxAwQTnIi6WYqq44nOKUylSWxWO/vi+8pE='
 
+  [mod.'github.com/russross/blackfriday/v2']
+    version = 'v2.1.0'
+    hash = 'sha256-R+84l1si8az5yDqd5CYcFrTyNZ1eSYlpXKq6nFt4OTQ='
+
   [mod.'github.com/spf13/cobra']
-    version = 'v1.8.0'
-    hash = 'sha256-oAE+fEaRfZPE541IPWE0GMeBBYgH2DMhtZNxzp7DFlY='
+    version = 'v1.10.2'
+    hash = 'sha256-nbRCTFiDCC2jKK7AHi79n7urYCMP5yDZnWtNVJrDi+k='
 
   [mod.'github.com/spf13/pflag']
-    version = 'v1.0.5'
-    hash = 'sha256-w9LLYzxxP74WHT4ouBspH/iQZXjuAh2WQCHsuvyEjAw='
+    version = 'v1.0.9'
+    hash = 'sha256-YAjyYpq5BXCosVJtvYLWFG1t4gma2ylzc7ILLoj/hD8='
+
+  [mod.'go.yaml.in/yaml/v3']
+    version = 'v3.0.4'
+    hash = 'sha256-NkGFiDPoCxbr3LFsI6OCygjjkY0rdmg5ggvVVwpyDQ4='
