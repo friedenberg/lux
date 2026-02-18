@@ -17,8 +17,8 @@ import (
 	"github.com/amarbel-llc/lux/internal/mcp"
 	"github.com/amarbel-llc/lux/internal/server"
 	"github.com/amarbel-llc/lux/internal/subprocess"
+	"github.com/amarbel-llc/lux/internal/tools"
 	luxtransport "github.com/amarbel-llc/lux/internal/transport"
-	"github.com/amarbel-llc/purse-first/purse"
 )
 
 var rootCmd = &cobra.Command{
@@ -391,28 +391,13 @@ var genmanCmd = &cobra.Command{
 }
 
 var generatePluginCmd = &cobra.Command{
-	Use:    "generate-plugin <output-dir>",
-	Short:  "Generate purse-first plugin manifest",
+	Use:    "generate-plugin [output-dir]",
+	Short:  "Generate purse-first plugin artifacts",
 	Hidden: true,
 	Args:   cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		b := purse.NewPluginBuilder("lux").
-			Command("lux", "mcp", "stdio")
-
-		p := b.Build()
-		dir := args[0]
-
-		if err := purse.WritePlugin(dir, p); err != nil {
-			return fmt.Errorf("generating plugin: %w", err)
-		}
-
-		if mf := b.BuildMappings(); mf != nil {
-			if err := purse.WriteMappings(dir, p.Name, mf); err != nil {
-				return fmt.Errorf("generating mappings: %v", err)
-			}
-		}
-
-		return nil
+		app := tools.RegisterAll(nil)
+		return app.GenerateAll(args[0])
 	},
 }
 
