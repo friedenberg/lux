@@ -52,7 +52,7 @@
             scdoc < ${manDocSrc}/lux-config.5.scd > $out/share/man/man5/lux-config.5
 
             # purse-first plugin manifest
-            $out/bin/lux generate-plugin $out/share/purse-first
+            $out/bin/lux generate-plugin $out
           '';
 
 
