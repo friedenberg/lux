@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/command"
-	"github.com/amarbel-llc/purse-first/libs/go-mcp/protocol"
 	"github.com/amarbel-llc/lux/internal/lsp"
 )
 
@@ -34,35 +33,35 @@ func positionParams() []command.Param {
 	}
 }
 
-// makePositionHandler creates a RunMCP handler that parses (uri, line, character)
+// makePositionHandler creates a Run handler that parses (uri, line, character)
 // and delegates to the given bridge method.
 func makePositionHandler(
-	fn func(ctx context.Context, uri lsp.DocumentURI, line, character int) (*protocol.ToolCallResult, error),
-) func(ctx context.Context, args json.RawMessage) (*protocol.ToolCallResult, error) {
-	return func(ctx context.Context, args json.RawMessage) (*protocol.ToolCallResult, error) {
+	fn func(ctx context.Context, uri lsp.DocumentURI, line, character int) (*command.Result, error),
+) func(ctx context.Context, args json.RawMessage, _ command.Prompter) (*command.Result, error) {
+	return func(ctx context.Context, args json.RawMessage, _ command.Prompter) (*command.Result, error) {
 		var a struct {
 			URI       string `json:"uri"`
 			Line      int    `json:"line"`
 			Character int    `json:"character"`
 		}
 		if err := json.Unmarshal(args, &a); err != nil {
-			return protocol.ErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
+			return command.TextErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
 		}
 		return fn(ctx, lsp.DocumentURI(a.URI), a.Line, a.Character)
 	}
 }
 
-// makeURIHandler creates a RunMCP handler that parses (uri) and delegates to the
+// makeURIHandler creates a Run handler that parses (uri) and delegates to the
 // given bridge method.
 func makeURIHandler(
-	fn func(ctx context.Context, uri lsp.DocumentURI) (*protocol.ToolCallResult, error),
-) func(ctx context.Context, args json.RawMessage) (*protocol.ToolCallResult, error) {
-	return func(ctx context.Context, args json.RawMessage) (*protocol.ToolCallResult, error) {
+	fn func(ctx context.Context, uri lsp.DocumentURI) (*command.Result, error),
+) func(ctx context.Context, args json.RawMessage, _ command.Prompter) (*command.Result, error) {
+	return func(ctx context.Context, args json.RawMessage, _ command.Prompter) (*command.Result, error) {
 		var a struct {
 			URI string `json:"uri"`
 		}
 		if err := json.Unmarshal(args, &a); err != nil {
-			return protocol.ErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
+			return command.TextErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
 		}
 		return fn(ctx, lsp.DocumentURI(a.URI))
 	}
@@ -75,7 +74,7 @@ func registerPositionTools(app *command.App, bridge *Bridge) {
 			Short: "Get type information, documentation, and signatures for a symbol. Agents MUST use this tool instead of reading source files when you need to understand what a function/type does, its parameters, return types, or documentation. Unlike grep/read which show raw text, hover provides semantically-parsed information from the language server. DO NOT read files just to check function signatures or types - use this tool instead.",
 		},
 		Params: positionParams(),
-		RunMCP: makePositionHandler(bridge.Hover),
+		Run: makePositionHandler(bridge.Hover),
 	})
 
 	app.AddCommand(&command.Command{
@@ -84,7 +83,7 @@ func registerPositionTools(app *command.App, bridge *Bridge) {
 			Short: "Jump to the definition of any symbol (function, type, variable). Agents MUST use this tool instead of grep/search when you know a symbol name and need to find its definition or implementation. Uses semantic analysis to find the actual definition, not just string matches. DO NOT use grep or file searches to locate function/type definitions - this tool handles cross-file navigation, interface implementations, and import sources accurately.",
 		},
 		Params: positionParams(),
-		RunMCP: makePositionHandler(bridge.Definition),
+		Run: makePositionHandler(bridge.Definition),
 	})
 
 	app.AddCommand(&command.Command{
@@ -93,7 +92,7 @@ func registerPositionTools(app *command.App, bridge *Bridge) {
 			Short: "Get context-aware code completions at a cursor position. Agents should use this tool instead of reading documentation or source files when exploring available methods on a type, discovering struct fields, finding imported symbols, or understanding API surfaces. Shows only valid symbols, methods, and fields actually available in scope - more accurate than guessing from source.",
 		},
 		Params: positionParams(),
-		RunMCP: makePositionHandler(bridge.Completion),
+		Run: makePositionHandler(bridge.Completion),
 	})
 }
 
@@ -106,7 +105,7 @@ func registerURITools(app *command.App, bridge *Bridge) {
 		Params: []command.Param{
 			{Name: "uri", Type: command.String, Description: "File URI (e.g., file:///path/to/file.go)", Required: true},
 		},
-		RunMCP: makeURIHandler(bridge.Format),
+		Run: makeURIHandler(bridge.Format),
 	})
 
 	app.AddCommand(&command.Command{
@@ -117,7 +116,7 @@ func registerURITools(app *command.App, bridge *Bridge) {
 		Params: []command.Param{
 			{Name: "uri", Type: command.String, Description: "File URI (e.g., file:///path/to/file.go)", Required: true},
 		},
-		RunMCP: makeURIHandler(bridge.DocumentSymbols),
+		Run: makeURIHandler(bridge.DocumentSymbols),
 	})
 
 	app.AddCommand(&command.Command{
@@ -128,7 +127,7 @@ func registerURITools(app *command.App, bridge *Bridge) {
 		Params: []command.Param{
 			{Name: "uri", Type: command.String, Description: "File URI (e.g., file:///path/to/file.go)", Required: true},
 		},
-		RunMCP: makeURIHandler(bridge.Diagnostics),
+		Run: makeURIHandler(bridge.Diagnostics),
 	})
 }
 
@@ -144,7 +143,7 @@ func registerReferencesTool(app *command.App, bridge *Bridge) {
 			{Name: "character", Type: command.Int, Description: "0-indexed character offset", Required: true},
 			{Name: "include_declaration", Type: command.Bool, Description: "Include the declaration in results", Default: true},
 		},
-		RunMCP: func(ctx context.Context, args json.RawMessage) (*protocol.ToolCallResult, error) {
+		Run: func(ctx context.Context, args json.RawMessage, _ command.Prompter) (*command.Result, error) {
 			var a struct {
 				URI                string `json:"uri"`
 				Line               int    `json:"line"`
@@ -152,7 +151,7 @@ func registerReferencesTool(app *command.App, bridge *Bridge) {
 				IncludeDeclaration *bool  `json:"include_declaration"`
 			}
 			if err := json.Unmarshal(args, &a); err != nil {
-				return protocol.ErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
+				return command.TextErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
 			}
 
 			includeDecl := true
@@ -178,7 +177,7 @@ func registerCodeActionTool(app *command.App, bridge *Bridge) {
 			{Name: "end_line", Type: command.Int, Description: "0-indexed end line", Required: true},
 			{Name: "end_character", Type: command.Int, Description: "0-indexed end character", Required: true},
 		},
-		RunMCP: func(ctx context.Context, args json.RawMessage) (*protocol.ToolCallResult, error) {
+		Run: func(ctx context.Context, args json.RawMessage, _ command.Prompter) (*command.Result, error) {
 			var a struct {
 				URI            string `json:"uri"`
 				StartLine      int    `json:"start_line"`
@@ -187,7 +186,7 @@ func registerCodeActionTool(app *command.App, bridge *Bridge) {
 				EndCharacter   int    `json:"end_character"`
 			}
 			if err := json.Unmarshal(args, &a); err != nil {
-				return protocol.ErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
+				return command.TextErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
 			}
 			return bridge.CodeAction(ctx, lsp.DocumentURI(a.URI), a.StartLine, a.StartCharacter, a.EndLine, a.EndCharacter)
 		},
@@ -206,7 +205,7 @@ func registerRenameTool(app *command.App, bridge *Bridge) {
 			{Name: "character", Type: command.Int, Description: "0-indexed character offset", Required: true},
 			{Name: "new_name", Type: command.String, Description: "New name for the symbol", Required: true},
 		},
-		RunMCP: func(ctx context.Context, args json.RawMessage) (*protocol.ToolCallResult, error) {
+		Run: func(ctx context.Context, args json.RawMessage, _ command.Prompter) (*command.Result, error) {
 			var a struct {
 				URI       string `json:"uri"`
 				Line      int    `json:"line"`
@@ -214,7 +213,7 @@ func registerRenameTool(app *command.App, bridge *Bridge) {
 				NewName   string `json:"new_name"`
 			}
 			if err := json.Unmarshal(args, &a); err != nil {
-				return protocol.ErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
+				return command.TextErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
 			}
 			return bridge.Rename(ctx, lsp.DocumentURI(a.URI), a.Line, a.Character, a.NewName)
 		},
@@ -231,13 +230,13 @@ func registerWorkspaceSymbolsTool(app *command.App, bridge *Bridge) {
 			{Name: "query", Type: command.String, Description: "Symbol name pattern to search for", Required: true},
 			{Name: "uri", Type: command.String, Description: "Any file URI in the workspace (used to identify which LSP to query)", Required: true},
 		},
-		RunMCP: func(ctx context.Context, args json.RawMessage) (*protocol.ToolCallResult, error) {
+		Run: func(ctx context.Context, args json.RawMessage, _ command.Prompter) (*command.Result, error) {
 			var a struct {
 				Query string `json:"query"`
 				URI   string `json:"uri"`
 			}
 			if err := json.Unmarshal(args, &a); err != nil {
-				return protocol.ErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
+				return command.TextErrorResult(fmt.Sprintf("invalid arguments: %v", err)), nil
 			}
 			return bridge.WorkspaceSymbols(ctx, lsp.DocumentURI(a.URI), a.Query)
 		},

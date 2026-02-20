@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/command"
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/jsonrpc"
-	"github.com/amarbel-llc/purse-first/libs/go-mcp/protocol"
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/lsp"
@@ -182,7 +182,7 @@ func (b *Bridge) withDocument(ctx context.Context, uri lsp.DocumentURI, fn func(
 	return b.callWithRetry(ctx, inst, fn)
 }
 
-func (b *Bridge) Hover(ctx context.Context, uri lsp.DocumentURI, line, character int) (*protocol.ToolCallResult, error) {
+func (b *Bridge) Hover(ctx context.Context, uri lsp.DocumentURI, line, character int) (*command.Result, error) {
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodTextDocumentHover, lsp.TextDocumentPositionParams{
 			TextDocument: lsp.TextDocumentIdentifier{URI: uri},
@@ -190,29 +190,25 @@ func (b *Bridge) Hover(ctx context.Context, uri lsp.DocumentURI, line, character
 		})
 	})
 	if err != nil {
-		return protocol.ErrorResult(err.Error()), nil
+		return command.TextErrorResult(err.Error()), nil
 	}
 
 	if result == nil || string(result) == "null" {
-		return &protocol.ToolCallResult{
-			Content: []protocol.ContentBlock{protocol.TextContent("No hover information available")},
-		}, nil
+		return command.TextResult("No hover information available"), nil
 	}
 
 	var hover struct {
 		Contents json.RawMessage `json:"contents"`
 	}
 	if err := json.Unmarshal(result, &hover); err != nil {
-		return protocol.ErrorResult(fmt.Sprintf("parsing hover result: %v", err)), nil
+		return command.TextErrorResult(fmt.Sprintf("parsing hover result: %v", err)), nil
 	}
 
 	text := extractMarkdownContent(hover.Contents)
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, nil
+	return command.TextResult(text), nil
 }
 
-func (b *Bridge) Definition(ctx context.Context, uri lsp.DocumentURI, line, character int) (*protocol.ToolCallResult, error) {
+func (b *Bridge) Definition(ctx context.Context, uri lsp.DocumentURI, line, character int) (*command.Result, error) {
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodTextDocumentDefinition, lsp.TextDocumentPositionParams{
 			TextDocument: lsp.TextDocumentIdentifier{URI: uri},
@@ -220,23 +216,19 @@ func (b *Bridge) Definition(ctx context.Context, uri lsp.DocumentURI, line, char
 		})
 	})
 	if err != nil {
-		return protocol.ErrorResult(err.Error()), nil
+		return command.TextErrorResult(err.Error()), nil
 	}
 
 	locations := parseLocations(result)
 	if len(locations) == 0 {
-		return &protocol.ToolCallResult{
-			Content: []protocol.ContentBlock{protocol.TextContent("No definition found")},
-		}, nil
+		return command.TextResult("No definition found"), nil
 	}
 
 	text := formatLocations(locations)
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, nil
+	return command.TextResult(text), nil
 }
 
-func (b *Bridge) References(ctx context.Context, uri lsp.DocumentURI, line, character int, includeDecl bool) (*protocol.ToolCallResult, error) {
+func (b *Bridge) References(ctx context.Context, uri lsp.DocumentURI, line, character int, includeDecl bool) (*command.Result, error) {
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodTextDocumentReferences, map[string]any{
 			"textDocument": lsp.TextDocumentIdentifier{URI: uri},
@@ -245,23 +237,19 @@ func (b *Bridge) References(ctx context.Context, uri lsp.DocumentURI, line, char
 		})
 	})
 	if err != nil {
-		return protocol.ErrorResult(err.Error()), nil
+		return command.TextErrorResult(err.Error()), nil
 	}
 
 	locations := parseLocations(result)
 	if len(locations) == 0 {
-		return &protocol.ToolCallResult{
-			Content: []protocol.ContentBlock{protocol.TextContent("No references found")},
-		}, nil
+		return command.TextResult("No references found"), nil
 	}
 
 	text := formatLocations(locations)
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, nil
+	return command.TextResult(text), nil
 }
 
-func (b *Bridge) Completion(ctx context.Context, uri lsp.DocumentURI, line, character int) (*protocol.ToolCallResult, error) {
+func (b *Bridge) Completion(ctx context.Context, uri lsp.DocumentURI, line, character int) (*command.Result, error) {
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodTextDocumentCompletion, lsp.TextDocumentPositionParams{
 			TextDocument: lsp.TextDocumentIdentifier{URI: uri},
@@ -269,23 +257,19 @@ func (b *Bridge) Completion(ctx context.Context, uri lsp.DocumentURI, line, char
 		})
 	})
 	if err != nil {
-		return protocol.ErrorResult(err.Error()), nil
+		return command.TextErrorResult(err.Error()), nil
 	}
 
 	items := parseCompletionItems(result)
 	if len(items) == 0 {
-		return &protocol.ToolCallResult{
-			Content: []protocol.ContentBlock{protocol.TextContent("No completions available")},
-		}, nil
+		return command.TextResult("No completions available"), nil
 	}
 
 	text := formatCompletionItems(items)
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, nil
+	return command.TextResult(text), nil
 }
 
-func (b *Bridge) Format(ctx context.Context, uri lsp.DocumentURI) (*protocol.ToolCallResult, error) {
+func (b *Bridge) Format(ctx context.Context, uri lsp.DocumentURI) (*command.Result, error) {
 	if result, handled := b.tryExternalFormat(ctx, uri); handled {
 		return result, nil
 	}
@@ -300,27 +284,23 @@ func (b *Bridge) Format(ctx context.Context, uri lsp.DocumentURI) (*protocol.Too
 		})
 	})
 	if err != nil {
-		return protocol.ErrorResult(err.Error()), nil
+		return command.TextErrorResult(err.Error()), nil
 	}
 
 	var edits []lsp.TextEdit
 	if err := json.Unmarshal(result, &edits); err != nil {
-		return protocol.ErrorResult(fmt.Sprintf("parsing edits: %v", err)), nil
+		return command.TextErrorResult(fmt.Sprintf("parsing edits: %v", err)), nil
 	}
 
 	if len(edits) == 0 {
-		return &protocol.ToolCallResult{
-			Content: []protocol.ContentBlock{protocol.TextContent("No formatting changes needed")},
-		}, nil
+		return command.TextResult("No formatting changes needed"), nil
 	}
 
 	text := formatTextEdits(edits)
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, nil
+	return command.TextResult(text), nil
 }
 
-func (b *Bridge) tryExternalFormat(ctx context.Context, uri lsp.DocumentURI) (*protocol.ToolCallResult, bool) {
+func (b *Bridge) tryExternalFormat(ctx context.Context, uri lsp.DocumentURI) (*command.Result, bool) {
 	if b.fmtRouter == nil {
 		return nil, false
 	}
@@ -333,18 +313,16 @@ func (b *Bridge) tryExternalFormat(ctx context.Context, uri lsp.DocumentURI) (*p
 
 	content, err := b.readFile(uri)
 	if err != nil {
-		return protocol.ErrorResult(fmt.Sprintf("reading file for formatting: %v", err)), true
+		return command.TextErrorResult(fmt.Sprintf("reading file for formatting: %v", err)), true
 	}
 
 	fmtResult, err := formatter.Format(ctx, f, filePath, []byte(content), b.executor)
 	if err != nil {
-		return protocol.ErrorResult(fmt.Sprintf("external formatter %s failed: %v", f.Name, err)), true
+		return command.TextErrorResult(fmt.Sprintf("external formatter %s failed: %v", f.Name, err)), true
 	}
 
 	if !fmtResult.Changed {
-		return &protocol.ToolCallResult{
-			Content: []protocol.ContentBlock{protocol.TextContent("No formatting changes needed")},
-		}, true
+		return command.TextResult("No formatting changes needed"), true
 	}
 
 	lines := strings.Count(content, "\n")
@@ -357,32 +335,26 @@ func (b *Bridge) tryExternalFormat(ctx context.Context, uri lsp.DocumentURI) (*p
 	}
 
 	text := formatTextEdits([]lsp.TextEdit{edit})
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, true
+	return command.TextResult(text), true
 }
 
-func (b *Bridge) DocumentSymbols(ctx context.Context, uri lsp.DocumentURI) (*protocol.ToolCallResult, error) {
+func (b *Bridge) DocumentSymbols(ctx context.Context, uri lsp.DocumentURI) (*command.Result, error) {
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodTextDocumentDocumentSymbol, map[string]any{
 			"textDocument": lsp.TextDocumentIdentifier{URI: uri},
 		})
 	})
 	if err != nil {
-		return protocol.ErrorResult(err.Error()), nil
+		return command.TextErrorResult(err.Error()), nil
 	}
 
 	symbols := parseSymbols(result)
 	if len(symbols) == 0 {
-		return &protocol.ToolCallResult{
-			Content: []protocol.ContentBlock{protocol.TextContent("No symbols found")},
-		}, nil
+		return command.TextResult("No symbols found"), nil
 	}
 
 	text := formatSymbols(symbols, 0)
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, nil
+	return command.TextResult(text), nil
 }
 
 func (b *Bridge) DocumentSymbolsRaw(ctx context.Context, uri lsp.DocumentURI) ([]Symbol, error) {
@@ -398,7 +370,7 @@ func (b *Bridge) DocumentSymbolsRaw(ctx context.Context, uri lsp.DocumentURI) ([
 	return parseSymbols(result), nil
 }
 
-func (b *Bridge) CodeAction(ctx context.Context, uri lsp.DocumentURI, startLine, startChar, endLine, endChar int) (*protocol.ToolCallResult, error) {
+func (b *Bridge) CodeAction(ctx context.Context, uri lsp.DocumentURI, startLine, startChar, endLine, endChar int) (*command.Result, error) {
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodTextDocumentCodeAction, map[string]any{
 			"textDocument": lsp.TextDocumentIdentifier{URI: uri},
@@ -412,23 +384,19 @@ func (b *Bridge) CodeAction(ctx context.Context, uri lsp.DocumentURI, startLine,
 		})
 	})
 	if err != nil {
-		return protocol.ErrorResult(err.Error()), nil
+		return command.TextErrorResult(err.Error()), nil
 	}
 
 	actions := parseCodeActions(result)
 	if len(actions) == 0 {
-		return &protocol.ToolCallResult{
-			Content: []protocol.ContentBlock{protocol.TextContent("No code actions available")},
-		}, nil
+		return command.TextResult("No code actions available"), nil
 	}
 
 	text := formatCodeActions(actions)
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, nil
+	return command.TextResult(text), nil
 }
 
-func (b *Bridge) Rename(ctx context.Context, uri lsp.DocumentURI, line, character int, newName string) (*protocol.ToolCallResult, error) {
+func (b *Bridge) Rename(ctx context.Context, uri lsp.DocumentURI, line, character int, newName string) (*command.Result, error) {
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodTextDocumentRename, map[string]any{
 			"textDocument": lsp.TextDocumentIdentifier{URI: uri},
@@ -437,64 +405,54 @@ func (b *Bridge) Rename(ctx context.Context, uri lsp.DocumentURI, line, characte
 		})
 	})
 	if err != nil {
-		return protocol.ErrorResult(err.Error()), nil
+		return command.TextErrorResult(err.Error()), nil
 	}
 
 	var edit WorkspaceEdit
 	if err := json.Unmarshal(result, &edit); err != nil {
-		return protocol.ErrorResult(fmt.Sprintf("parsing workspace edit: %v", err)), nil
+		return command.TextErrorResult(fmt.Sprintf("parsing workspace edit: %v", err)), nil
 	}
 
 	text := formatWorkspaceEdit(edit)
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, nil
+	return command.TextResult(text), nil
 }
 
-func (b *Bridge) WorkspaceSymbols(ctx context.Context, uri lsp.DocumentURI, query string) (*protocol.ToolCallResult, error) {
+func (b *Bridge) WorkspaceSymbols(ctx context.Context, uri lsp.DocumentURI, query string) (*command.Result, error) {
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodWorkspaceSymbol, map[string]any{
 			"query": query,
 		})
 	})
 	if err != nil {
-		return protocol.ErrorResult(err.Error()), nil
+		return command.TextErrorResult(err.Error()), nil
 	}
 
 	symbols := parseWorkspaceSymbols(result)
 	if len(symbols) == 0 {
-		return &protocol.ToolCallResult{
-			Content: []protocol.ContentBlock{protocol.TextContent("No symbols found matching: " + query)},
-		}, nil
+		return command.TextResult("No symbols found matching: " + query), nil
 	}
 
 	text := formatWorkspaceSymbols(symbols)
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, nil
+	return command.TextResult(text), nil
 }
 
-func (b *Bridge) Diagnostics(ctx context.Context, uri lsp.DocumentURI) (*protocol.ToolCallResult, error) {
+func (b *Bridge) Diagnostics(ctx context.Context, uri lsp.DocumentURI) (*command.Result, error) {
 	result, err := b.withDocument(ctx, uri, func(inst *subprocess.LSPInstance) (json.RawMessage, error) {
 		return inst.Call(ctx, lsp.MethodTextDocumentDiagnostic, map[string]any{
 			"textDocument": lsp.TextDocumentIdentifier{URI: uri},
 		})
 	})
 	if err != nil {
-		return protocol.ErrorResult(err.Error()), nil
+		return command.TextErrorResult(err.Error()), nil
 	}
 
 	diagnostics := parseDiagnostics(result)
 	if len(diagnostics) == 0 {
-		return &protocol.ToolCallResult{
-			Content: []protocol.ContentBlock{protocol.TextContent("No diagnostics (errors, warnings) found")},
-		}, nil
+		return command.TextResult("No diagnostics (errors, warnings) found"), nil
 	}
 
 	text := formatDiagnostics(diagnostics, uri)
-	return &protocol.ToolCallResult{
-		Content: []protocol.ContentBlock{protocol.TextContent(text)},
-	}, nil
+	return command.TextResult(text), nil
 }
 
 func (b *Bridge) readFile(uri lsp.DocumentURI) (string, error) {
