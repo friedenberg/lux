@@ -4,7 +4,7 @@ go 1.25.6
 
 require (
 	github.com/BurntSushi/toml v1.3.2
-	github.com/amarbel-llc/purse-first/libs/go-mcp v0.0.0-20260217222858-cd512e5ef8b7
+	github.com/amarbel-llc/purse-first/libs/go-mcp v0.0.3-0.20260220172048-482890a2cabe
 	github.com/gobwas/glob v0.2.3
 	github.com/spf13/cobra v1.10.2
 )

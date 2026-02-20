@@ -11,6 +11,7 @@ import (
 
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/subprocess"
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/output"
 )
 
 type Result struct {
@@ -66,13 +67,15 @@ func formatStdin(ctx context.Context, binPath string, args []string, env map[str
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("formatter %s failed: %w\nstderr: %s", binPath, err, stderr.String())
+		limited := output.LimitStderr(stderr.String())
+		return nil, fmt.Errorf("formatter %s failed: %w\nstderr: %s", binPath, err, limited.Content)
 	}
 
 	formatted := stdout.String()
+	limited := output.LimitStderr(stderr.String())
 	return &Result{
 		Formatted: formatted,
-		Stderr:    stderr.String(),
+		Stderr:    limited.Content,
 		Changed:   formatted != string(content),
 	}, nil
 }
@@ -99,7 +102,8 @@ func formatFilepath(ctx context.Context, binPath string, args []string, env map[
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("formatter %s failed: %w\nstderr: %s", binPath, err, stderr.String())
+		limited := output.LimitStderr(stderr.String())
+		return nil, fmt.Errorf("formatter %s failed: %w\nstderr: %s", binPath, err, limited.Content)
 	}
 
 	formatted, err := os.ReadFile(tmpPath)
@@ -107,9 +111,10 @@ func formatFilepath(ctx context.Context, binPath string, args []string, env map[
 		return nil, fmt.Errorf("reading formatted file: %w", err)
 	}
 
+	limited := output.LimitStderr(stderr.String())
 	return &Result{
 		Formatted: string(formatted),
-		Stderr:    stderr.String(),
+		Stderr:    limited.Content,
 		Changed:   string(formatted) != string(content),
 	}, nil
 }
