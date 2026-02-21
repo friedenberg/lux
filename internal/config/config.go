@@ -37,6 +37,10 @@ type CapabilityOverride struct {
 	Enable  []string `toml:"enable,omitempty"`
 }
 
+func ConfigDir() string {
+	return configDir()
+}
+
 func configDir() string {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return filepath.Join(xdg, "lux")

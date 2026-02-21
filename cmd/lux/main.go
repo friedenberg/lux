@@ -433,6 +433,10 @@ var generatePluginCmd = &cobra.Command{
 func init() {
 	formatCmd.Flags().BoolVar(&formatStdout, "stdout", false, "Print formatted output to stdout instead of writing in-place")
 
+	initCmd.Flags().BoolVar(&initDefault, "default", false, "Write curated default configs for common languages")
+	initCmd.Flags().BoolVar(&initForce, "force", false, "Overwrite existing config files")
+	rootCmd.AddCommand(initCmd)
+
 	rootCmd.AddCommand(serveCmd)
 
 	addCmd.Flags().StringVarP(&addBinary, "binary", "b", "",
