@@ -1,10 +1,10 @@
-# Lux: LSP Multiplexer
 
-default:
-    @just --list
+default: build test
 
 # Build the binary
-build:
+build: build-gomod2nix build-go build-nix
+
+build-nix:
     nix build
 
 build-gomod2nix:
@@ -13,57 +13,51 @@ build-gomod2nix:
 build-go: build-gomod2nix
     nix develop --command go build -o lux ./cmd/lux
 
-# Run tests
-test:
-    nix develop --command go test ./...
+test: test-go
 
-# Run tests with verbose output
-test-v:
+test-go:
     nix develop --command go test -v ./...
 
-# Format code
-fmt:
+fmt: fmt-go
+
+fmt-go:
     nix develop --command go fmt ./...
     shfmt -w -i 2 -ci ./*.sh 2>/dev/null || true
 
-# Lint code
-lint:
+lint: lint-go
+
+lint-go:
     go vet ./...
 
-# Run the LSP server
-serve:
+run-serve:
     go run ./cmd/lux serve
 
 # Show configured LSPs
-list:
+run-list:
     go run ./cmd/lux list
 
 # Check LSP status
-status:
+run-status:
     go run ./cmd/lux status
 
 # Add a new LSP from a flake
-add flake:
+run-add flake:
     go run ./cmd/lux add "{{flake}}"
 
 # Run MCP server over stdio
-mcp-stdio:
+run-mcp-stdio:
     go run ./cmd/lux mcp stdio
 
 # Run MCP server over SSE
-mcp-sse addr=":8080":
+run-mcp-sse addr=":8080":
     go run ./cmd/lux mcp sse --addr "{{addr}}"
 
 # Run MCP server over HTTP
-mcp-http addr=":8081":
+run-mcp-http addr=":8081":
     go run ./cmd/lux mcp http --addr "{{addr}}"
 
-# Run in nix develop shell
-dev:
-    nix develop
-
 # Install MCP server to Claude Code config
-install:
+run-install:
     nix run .#install-mcp
 
 # Clean build artifacts
