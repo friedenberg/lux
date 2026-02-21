@@ -18,6 +18,11 @@ test: test-go
 test-go:
     nix develop --command go test -v ./...
 
+update: update-nix
+
+update-nix:
+  nix flake update
+
 fmt: fmt-go
 
 fmt-go:
