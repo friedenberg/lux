@@ -72,6 +72,90 @@ func TestLoadDir_NonExistent(t *testing.T) {
 	}
 }
 
+func TestValidate_Valid(t *testing.T) {
+	lsps := map[string]bool{"gopls": true, "pyright": true}
+	fmts := map[string]bool{"golines": true, "isort": true, "black": true}
+
+	configs := []*Config{
+		{Name: "go", Extensions: []string{"go"}, LSP: "gopls", Formatters: []string{"golines"}},
+		{Name: "python", Extensions: []string{"py"}, LSP: "pyright", Formatters: []string{"isort", "black"}, FormatterMode: "chain"},
+	}
+
+	if err := Validate(configs, lsps, fmts); err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestValidate_NoMatchingFields(t *testing.T) {
+	configs := []*Config{{Name: "bad", LSP: "gopls"}}
+	err := Validate(configs, map[string]bool{"gopls": true}, nil)
+	if err == nil {
+		t.Fatal("expected error for missing extensions/patterns/language_ids")
+	}
+}
+
+func TestValidate_UnknownLSP(t *testing.T) {
+	configs := []*Config{{Name: "go", Extensions: []string{"go"}, LSP: "unknown"}}
+	err := Validate(configs, map[string]bool{"gopls": true}, nil)
+	if err == nil {
+		t.Fatal("expected error for unknown LSP")
+	}
+}
+
+func TestValidate_UnknownFormatter(t *testing.T) {
+	configs := []*Config{{Name: "go", Extensions: []string{"go"}, LSP: "gopls", Formatters: []string{"unknown"}}}
+	err := Validate(configs, map[string]bool{"gopls": true}, map[string]bool{"golines": true})
+	if err == nil {
+		t.Fatal("expected error for unknown formatter")
+	}
+}
+
+func TestValidate_DuplicateExtension(t *testing.T) {
+	configs := []*Config{
+		{Name: "go", Extensions: []string{"go"}, LSP: "gopls"},
+		{Name: "golang", Extensions: []string{"go"}, LSP: "gopls"},
+	}
+	err := Validate(configs, map[string]bool{"gopls": true}, nil)
+	if err == nil {
+		t.Fatal("expected error for duplicate extension")
+	}
+}
+
+func TestValidate_DuplicateLanguageID(t *testing.T) {
+	configs := []*Config{
+		{Name: "go", LanguageIDs: []string{"go"}, LSP: "gopls"},
+		{Name: "golang", LanguageIDs: []string{"go"}, LSP: "gopls"},
+	}
+	err := Validate(configs, map[string]bool{"gopls": true}, nil)
+	if err == nil {
+		t.Fatal("expected error for duplicate language_id")
+	}
+}
+
+func TestValidate_InvalidFormatterMode(t *testing.T) {
+	configs := []*Config{{Name: "go", Extensions: []string{"go"}, LSP: "gopls", FormatterMode: "invalid"}}
+	err := Validate(configs, map[string]bool{"gopls": true}, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid formatter_mode")
+	}
+}
+
+func TestValidate_InvalidLSPFormat(t *testing.T) {
+	configs := []*Config{{Name: "go", Extensions: []string{"go"}, LSP: "gopls", LSPFormat: "invalid"}}
+	err := Validate(configs, map[string]bool{"gopls": true}, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid lsp_format")
+	}
+}
+
+func TestValidate_EmptyLSP(t *testing.T) {
+	configs := []*Config{{Name: "go", Extensions: []string{"go"}, Formatters: []string{"golines"}}}
+	err := Validate(configs, nil, map[string]bool{"golines": true})
+	if err != nil {
+		t.Errorf("LSP should be optional, got: %v", err)
+	}
+}
+
 func TestLoadDir_MultipleFiles(t *testing.T) {
 	dir := t.TempDir()
 

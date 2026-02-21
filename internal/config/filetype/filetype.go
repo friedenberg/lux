@@ -60,3 +60,48 @@ func LoadDir(dir string) ([]*Config, error) {
 
 	return configs, nil
 }
+
+func Validate(configs []*Config, lsps, formatters map[string]bool) error {
+	seenExts := make(map[string]string)
+	seenLangs := make(map[string]string)
+
+	for _, cfg := range configs {
+		if len(cfg.Extensions) == 0 && len(cfg.Patterns) == 0 && len(cfg.LanguageIDs) == 0 {
+			return fmt.Errorf("filetype/%s.toml: at least one of extensions, patterns, or language_ids is required", cfg.Name)
+		}
+
+		if cfg.LSP != "" && !lsps[cfg.LSP] {
+			return fmt.Errorf("filetype/%s.toml: lsp %q not found in lsps.toml", cfg.Name, cfg.LSP)
+		}
+
+		for _, f := range cfg.Formatters {
+			if !formatters[f] {
+				return fmt.Errorf("filetype/%s.toml: formatter %q not found in formatters.toml", cfg.Name, f)
+			}
+		}
+
+		if cfg.FormatterMode != "" && cfg.FormatterMode != "chain" && cfg.FormatterMode != "fallback" {
+			return fmt.Errorf("filetype/%s.toml: invalid formatter_mode %q (must be \"chain\" or \"fallback\")", cfg.Name, cfg.FormatterMode)
+		}
+
+		if cfg.LSPFormat != "" && cfg.LSPFormat != "never" && cfg.LSPFormat != "fallback" && cfg.LSPFormat != "prefer" {
+			return fmt.Errorf("filetype/%s.toml: invalid lsp_format %q (must be \"never\", \"fallback\", or \"prefer\")", cfg.Name, cfg.LSPFormat)
+		}
+
+		for _, ext := range cfg.Extensions {
+			if other, ok := seenExts[ext]; ok {
+				return fmt.Errorf("filetype/%s.toml: extension %q also claimed by filetype/%s.toml", cfg.Name, ext, other)
+			}
+			seenExts[ext] = cfg.Name
+		}
+
+		for _, lang := range cfg.LanguageIDs {
+			if other, ok := seenLangs[lang]; ok {
+				return fmt.Errorf("filetype/%s.toml: language_id %q also claimed by filetype/%s.toml", cfg.Name, lang, other)
+			}
+			seenLangs[lang] = cfg.Name
+		}
+	}
+
+	return nil
+}
