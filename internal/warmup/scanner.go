@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/amarbel-llc/lux/internal/config"
+	"github.com/amarbel-llc/lux/internal/config/filetype"
 	"github.com/amarbel-llc/lux/pkg/filematch"
 )
 
@@ -15,13 +16,13 @@ const (
 )
 
 var skipDirs = map[string]bool{
-	".git":        true,
-	".hg":         true,
+	".git":         true,
+	".hg":          true,
 	"node_modules": true,
-	"vendor":      true,
-	"__pycache__": true,
-	".direnv":     true,
-	"result":      true,
+	"vendor":       true,
+	"__pycache__":  true,
+	".direnv":      true,
+	"result":       true,
 }
 
 type ScanResult struct {
@@ -29,11 +30,30 @@ type ScanResult struct {
 }
 
 type Scanner struct {
-	cfg *config.Config
+	cfg       *config.Config
+	matchers  *filematch.MatcherSet
+	lspByName map[string]string // filetype name -> LSP name
 }
 
-func NewScanner(cfg *config.Config) *Scanner {
-	return &Scanner{cfg: cfg}
+func NewScanner(cfg *config.Config, filetypes []*filetype.Config) *Scanner {
+	matchers := filematch.NewMatcherSet()
+	lspByName := make(map[string]string)
+
+	for _, ft := range filetypes {
+		if ft.LSP == "" {
+			continue
+		}
+		if err := matchers.Add(ft.Name, ft.Extensions, ft.Patterns, ft.LanguageIDs); err != nil {
+			continue
+		}
+		lspByName[ft.Name] = ft.LSP
+	}
+
+	return &Scanner{
+		cfg:       cfg,
+		matchers:  matchers,
+		lspByName: lspByName,
+	}
 }
 
 func (s *Scanner) ScanDirectories(dirs []string) ScanResult {
@@ -42,10 +62,6 @@ func (s *Scanner) ScanDirectories(dirs []string) ScanResult {
 	if total == 0 {
 		return result
 	}
-
-	// TODO(task-6): Rewrite to use filetype configs for matching.
-	// Fields were removed from config.LSP; routing now lives in filetype configs.
-	matchers := make(map[string]*filematch.Matcher, total)
 
 	fileCount := 0
 	for _, dir := range dirs {
@@ -76,12 +92,10 @@ func (s *Scanner) ScanDirectories(dirs []string) ScanResult {
 			}
 
 			ext := filepath.Ext(path)
-			for name, m := range matchers {
-				if result.LSPNames[name] {
-					continue
-				}
-				if m.MatchesExtension(ext) || m.MatchesPattern(path) {
-					result.LSPNames[name] = true
+			name := s.matchers.Match(path, ext, "")
+			if name != "" {
+				if lspName, ok := s.lspByName[name]; ok {
+					result.LSPNames[lspName] = true
 					if len(result.LSPNames) >= total {
 						return fs.SkipAll
 					}

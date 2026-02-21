@@ -288,6 +288,145 @@ func TestEffectiveLSPFormat(t *testing.T) {
 	}
 }
 
+func TestSaveTo(t *testing.T) {
+	dir := t.TempDir()
+
+	cfg := &Config{
+		Name:       "go",
+		Extensions: []string{"go"},
+		LSP:        "gopls",
+		Formatters: []string{"golines"},
+	}
+
+	if err := SaveTo(dir, cfg); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	// Verify file was created
+	path := filepath.Join(dir, "go.toml")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected file to exist: %v", err)
+	}
+
+	// Verify content can be loaded back
+	configs, err := LoadDir(dir)
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	if len(configs) != 1 {
+		t.Fatalf("expected 1 config, got %d", len(configs))
+	}
+	if configs[0].LSP != "gopls" {
+		t.Errorf("lsp = %q, want %q", configs[0].LSP, "gopls")
+	}
+	if len(configs[0].Extensions) != 1 || configs[0].Extensions[0] != "go" {
+		t.Errorf("extensions = %v, want [go]", configs[0].Extensions)
+	}
+}
+
+func TestSaveTo_EmptyName(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &Config{Extensions: []string{"go"}, LSP: "gopls"}
+
+	err := SaveTo(dir, cfg)
+	if err == nil {
+		t.Fatal("expected error for empty name")
+	}
+}
+
+func TestSaveTo_CreatesDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "nested", "dir")
+
+	cfg := &Config{
+		Name:       "go",
+		Extensions: []string{"go"},
+		LSP:        "gopls",
+	}
+
+	if err := SaveTo(dir, cfg); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	path := filepath.Join(dir, "go.toml")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected file to exist: %v", err)
+	}
+}
+
+func TestSaveIfNotExistsTo_NewFile(t *testing.T) {
+	dir := t.TempDir()
+
+	cfg := &Config{
+		Name:       "go",
+		Extensions: []string{"go"},
+		LSP:        "gopls",
+	}
+
+	created, err := SaveIfNotExistsTo(dir, cfg)
+	if err != nil {
+		t.Fatalf("SaveIfNotExistsTo: %v", err)
+	}
+	if !created {
+		t.Error("expected created = true for new file")
+	}
+
+	// Verify file exists
+	path := filepath.Join(dir, "go.toml")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected file to exist: %v", err)
+	}
+}
+
+func TestSaveIfNotExistsTo_ExistingFile(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create the file first
+	cfg := &Config{
+		Name:       "go",
+		Extensions: []string{"go"},
+		LSP:        "gopls",
+	}
+	if err := SaveTo(dir, cfg); err != nil {
+		t.Fatalf("SaveTo: %v", err)
+	}
+
+	// Try to save again with different content
+	cfg2 := &Config{
+		Name:       "go",
+		Extensions: []string{"go"},
+		LSP:        "gopls-v2",
+	}
+	created, err := SaveIfNotExistsTo(dir, cfg2)
+	if err != nil {
+		t.Fatalf("SaveIfNotExistsTo: %v", err)
+	}
+	if created {
+		t.Error("expected created = false for existing file")
+	}
+
+	// Verify original content is preserved
+	configs, err := LoadDir(dir)
+	if err != nil {
+		t.Fatalf("LoadDir: %v", err)
+	}
+	if len(configs) != 1 {
+		t.Fatalf("expected 1 config, got %d", len(configs))
+	}
+	if configs[0].LSP != "gopls" {
+		t.Errorf("lsp = %q, want %q (original should be preserved)", configs[0].LSP, "gopls")
+	}
+}
+
+func TestSaveIfNotExistsTo_EmptyName(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &Config{Extensions: []string{"go"}, LSP: "gopls"}
+
+	_, err := SaveIfNotExistsTo(dir, cfg)
+	if err == nil {
+		t.Fatal("expected error for empty name")
+	}
+}
+
 func TestLoadDir_MultipleFiles(t *testing.T) {
 	dir := t.TempDir()
 

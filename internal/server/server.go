@@ -21,6 +21,7 @@ type Server struct {
 	pool        *subprocess.Pool
 	router      *Router
 	fmtRouter   *formatter.Router
+	filetypes   []*filetype.Config
 	executor    subprocess.Executor
 	clientConn  *jsonrpc.Conn
 	controlSrv  *control.Server
@@ -47,10 +48,11 @@ func New(cfg *config.Config) (*Server, error) {
 	executor := subprocess.NewNixExecutor()
 
 	s := &Server{
-		cfg:      cfg,
-		router:   router,
-		executor: executor,
-		done:     make(chan struct{}),
+		cfg:       cfg,
+		router:    router,
+		filetypes: ftConfigs,
+		executor:  executor,
+		done:      make(chan struct{}),
 	}
 
 	s.pool = subprocess.NewPool(executor, func(lspName string) jsonrpc.Handler {
@@ -101,7 +103,7 @@ func (s *Server) Run(ctx context.Context) error {
 	handler := NewHandler(s)
 	s.clientConn = jsonrpc.NewConn(os.Stdin, os.Stdout, handler.Handle)
 
-	controlSrv, err := control.NewServer(s.cfg.SocketPath(), s.pool, s.cfg, s.executor)
+	controlSrv, err := control.NewServer(s.cfg.SocketPath(), s.pool, s.cfg, s.filetypes, s.executor)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not start control socket: %v\n", err)
 	} else {

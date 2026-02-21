@@ -6,11 +6,10 @@ import (
 	"testing"
 
 	"github.com/amarbel-llc/lux/internal/config"
+	"github.com/amarbel-llc/lux/internal/config/filetype"
 )
 
 func TestScanner_ScanDirectories(t *testing.T) {
-	// TODO(task-6): Scanner needs filetype configs for matching.
-	// Without matchers, no LSPs will be found.
 	dir := t.TempDir()
 
 	os.MkdirAll(filepath.Join(dir, "src"), 0755)
@@ -25,12 +24,23 @@ func TestScanner_ScanDirectories(t *testing.T) {
 		},
 	}
 
-	scanner := NewScanner(cfg)
+	filetypes := []*filetype.Config{
+		{Name: "go", Extensions: []string{".go"}, LSP: "gopls"},
+		{Name: "python", Extensions: []string{".py"}, LSP: "pyright"},
+		{Name: "rust", Extensions: []string{".rs"}, LSP: "rust-analyzer"},
+	}
+
+	scanner := NewScanner(cfg, filetypes)
 	result := scanner.ScanDirectories([]string{dir})
 
-	// No matchers are registered, so no LSPs should be found
-	if len(result.LSPNames) != 0 {
-		t.Errorf("expected 0 LSPs found (no matchers), got %d", len(result.LSPNames))
+	if !result.LSPNames["gopls"] {
+		t.Error("expected gopls to be found")
+	}
+	if !result.LSPNames["pyright"] {
+		t.Error("expected pyright to be found")
+	}
+	if result.LSPNames["rust-analyzer"] {
+		t.Error("expected rust-analyzer to NOT be found (no .rs files)")
 	}
 }
 
@@ -49,25 +59,48 @@ func TestScanner_ScanDirectories_SkipsDirs(t *testing.T) {
 		},
 	}
 
-	scanner := NewScanner(cfg)
+	filetypes := []*filetype.Config{
+		{Name: "javascript", Extensions: []string{".js"}, LSP: "tsserver"},
+		{Name: "python", Extensions: []string{".py"}, LSP: "pyright"},
+	}
+
+	scanner := NewScanner(cfg, filetypes)
 	result := scanner.ScanDirectories([]string{dir})
 
 	if result.LSPNames["tsserver"] {
-		t.Error("expected tsserver to NOT be found")
+		t.Error("expected tsserver to NOT be found (in node_modules)")
 	}
 	if result.LSPNames["pyright"] {
-		t.Error("expected pyright to NOT be found")
+		t.Error("expected pyright to NOT be found (in .git)")
 	}
 }
 
 func TestScanner_ScanDirectories_EmptyConfig(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{}
-	scanner := NewScanner(cfg)
+	scanner := NewScanner(cfg, nil)
 	result := scanner.ScanDirectories([]string{dir})
 
 	if len(result.LSPNames) != 0 {
 		t.Errorf("expected 0 LSPs found, got %d", len(result.LSPNames))
+	}
+}
+
+func TestScanner_ScanDirectories_NilFiletypes(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0644)
+
+	cfg := &config.Config{
+		LSPs: []config.LSP{
+			{Name: "gopls", Flake: "nixpkgs#gopls"},
+		},
+	}
+
+	scanner := NewScanner(cfg, nil)
+	result := scanner.ScanDirectories([]string{dir})
+
+	if len(result.LSPNames) != 0 {
+		t.Errorf("expected 0 LSPs found without filetypes, got %d", len(result.LSPNames))
 	}
 }
 
@@ -79,7 +112,7 @@ func TestScanner_AllLSPNames(t *testing.T) {
 		},
 	}
 
-	scanner := NewScanner(cfg)
+	scanner := NewScanner(cfg, nil)
 	names := scanner.AllLSPNames()
 
 	if len(names) != 2 {

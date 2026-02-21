@@ -65,6 +65,8 @@ func (h *Handler) handleInitialize(_ context.Context, msg *jsonrpc.Message) (*js
 					ftConfigs = []*filetype.Config{}
 				}
 
+				h.server.filetypes = ftConfigs
+
 				newRouter, routerErr := NewRouter(ftConfigs)
 				if routerErr == nil {
 					h.server.router = newRouter
@@ -95,7 +97,7 @@ func (h *Handler) handleInitialize(_ context.Context, msg *jsonrpc.Message) (*js
 
 	go func() {
 		dirs := extractWorkspaceDirs(&params)
-		scanner := warmup.NewScanner(h.server.cfg)
+		scanner := warmup.NewScanner(h.server.cfg, h.server.filetypes)
 		warmup.StartRelevantLSPs(context.Background(), h.server.pool, scanner, dirs, &params, h.server.cfg)
 	}()
 
@@ -133,6 +135,7 @@ func (h *Handler) handleDefault(ctx context.Context, msg *jsonrpc.Message) (*jso
 				h.server.mu.RLock()
 				initParams := h.server.initParams
 				cfg := h.server.cfg
+				filetypes := h.server.filetypes
 				h.server.mu.RUnlock()
 
 				if initParams == nil {
@@ -140,7 +143,7 @@ func (h *Handler) handleDefault(ctx context.Context, msg *jsonrpc.Message) (*jso
 				}
 
 				dirs := extractWorkspaceDirs(initParams)
-				scanner := warmup.NewScanner(cfg)
+				scanner := warmup.NewScanner(cfg, filetypes)
 				warmup.StartRelevantLSPs(context.Background(), h.server.pool, scanner, dirs, initParams, cfg)
 			}()
 		})
@@ -153,6 +156,7 @@ func (h *Handler) handleDefault(ctx context.Context, msg *jsonrpc.Message) (*jso
 				h.server.mu.RLock()
 				initParams := h.server.initParams
 				cfg := h.server.cfg
+				filetypes := h.server.filetypes
 				h.server.mu.RUnlock()
 
 				var dirs []string
@@ -160,7 +164,7 @@ func (h *Handler) handleDefault(ctx context.Context, msg *jsonrpc.Message) (*jso
 					dirs = append(dirs, folder.URI.Path())
 				}
 
-				scanner := warmup.NewScanner(cfg)
+				scanner := warmup.NewScanner(cfg, filetypes)
 				warmup.StartRelevantLSPs(context.Background(), h.server.pool, scanner, dirs, initParams, cfg)
 			}()
 		}

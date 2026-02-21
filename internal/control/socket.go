@@ -12,21 +12,23 @@ import (
 	"sync"
 
 	"github.com/amarbel-llc/lux/internal/config"
+	"github.com/amarbel-llc/lux/internal/config/filetype"
 	"github.com/amarbel-llc/lux/internal/subprocess"
 	"github.com/amarbel-llc/lux/internal/warmup"
 )
 
 type Server struct {
-	path     string
-	pool     *subprocess.Pool
-	cfg      *config.Config
-	executor subprocess.Executor
-	listener net.Listener
-	mu       sync.Mutex
-	closed   bool
+	path      string
+	pool      *subprocess.Pool
+	cfg       *config.Config
+	filetypes []*filetype.Config
+	executor  subprocess.Executor
+	listener  net.Listener
+	mu        sync.Mutex
+	closed    bool
 }
 
-func NewServer(path string, pool *subprocess.Pool, cfg *config.Config, executor subprocess.Executor) (*Server, error) {
+func NewServer(path string, pool *subprocess.Pool, cfg *config.Config, filetypes []*filetype.Config, executor subprocess.Executor) (*Server, error) {
 	os.Remove(path)
 
 	listener, err := net.Listen("unix", path)
@@ -35,11 +37,12 @@ func NewServer(path string, pool *subprocess.Pool, cfg *config.Config, executor 
 	}
 
 	return &Server{
-		path:     path,
-		pool:     pool,
-		cfg:      cfg,
-		executor: executor,
-		listener: listener,
+		path:      path,
+		pool:      pool,
+		cfg:       cfg,
+		filetypes: filetypes,
+		executor:  executor,
+		listener:  listener,
 	}, nil
 }
 
@@ -162,7 +165,7 @@ func (s *Server) handleStop(name string) string {
 
 func (s *Server) handleWarmup(dir string) string {
 	go func() {
-		scanner := warmup.NewScanner(s.cfg)
+		scanner := warmup.NewScanner(s.cfg, s.filetypes)
 		initParams := warmup.SynthesizeInitParams(dir)
 		warmup.StartRelevantLSPs(context.Background(), s.pool, scanner, []string{dir}, initParams, s.cfg)
 	}()
