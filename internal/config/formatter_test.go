@@ -13,18 +13,18 @@ func TestFormatterValidate(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid with flake and extensions",
+			name: "valid with flake",
 			cfg: FormatterConfig{
 				Formatters: []Formatter{
-					{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Extensions: []string{"go"}},
+					{Name: "gofumpt", Flake: "nixpkgs#gofumpt"},
 				},
 			},
 		},
 		{
-			name: "valid with path and patterns",
+			name: "valid with path",
 			cfg: FormatterConfig{
 				Formatters: []Formatter{
-					{Name: "prettier", Path: "/usr/bin/prettier", Patterns: []string{"*.js"}},
+					{Name: "prettier", Path: "/usr/bin/prettier"},
 				},
 			},
 		},
@@ -32,7 +32,7 @@ func TestFormatterValidate(t *testing.T) {
 			name: "missing name",
 			cfg: FormatterConfig{
 				Formatters: []Formatter{
-					{Flake: "nixpkgs#gofumpt", Extensions: []string{"go"}},
+					{Flake: "nixpkgs#gofumpt"},
 				},
 			},
 			wantErr: true,
@@ -41,7 +41,7 @@ func TestFormatterValidate(t *testing.T) {
 			name: "missing flake and path",
 			cfg: FormatterConfig{
 				Formatters: []Formatter{
-					{Name: "gofumpt", Extensions: []string{"go"}},
+					{Name: "gofumpt"},
 				},
 			},
 			wantErr: true,
@@ -50,16 +50,7 @@ func TestFormatterValidate(t *testing.T) {
 			name: "both flake and path",
 			cfg: FormatterConfig{
 				Formatters: []Formatter{
-					{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Path: "/usr/bin/gofumpt", Extensions: []string{"go"}},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing extensions and patterns",
-			cfg: FormatterConfig{
-				Formatters: []Formatter{
-					{Name: "gofumpt", Flake: "nixpkgs#gofumpt"},
+					{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Path: "/usr/bin/gofumpt"},
 				},
 			},
 			wantErr: true,
@@ -68,8 +59,8 @@ func TestFormatterValidate(t *testing.T) {
 			name: "duplicate names",
 			cfg: FormatterConfig{
 				Formatters: []Formatter{
-					{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Extensions: []string{"go"}},
-					{Name: "gofumpt", Flake: "nixpkgs#gofumpt2", Extensions: []string{"go"}},
+					{Name: "gofumpt", Flake: "nixpkgs#gofumpt"},
+					{Name: "gofumpt", Flake: "nixpkgs#gofumpt2"},
 				},
 			},
 			wantErr: true,
@@ -78,7 +69,7 @@ func TestFormatterValidate(t *testing.T) {
 			name: "invalid mode",
 			cfg: FormatterConfig{
 				Formatters: []Formatter{
-					{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Extensions: []string{"go"}, Mode: "invalid"},
+					{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Mode: "invalid"},
 				},
 			},
 			wantErr: true,
@@ -87,7 +78,7 @@ func TestFormatterValidate(t *testing.T) {
 			name: "valid stdin mode",
 			cfg: FormatterConfig{
 				Formatters: []Formatter{
-					{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Extensions: []string{"go"}, Mode: FormatterModeStdin},
+					{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Mode: FormatterModeStdin},
 				},
 			},
 		},
@@ -95,7 +86,7 @@ func TestFormatterValidate(t *testing.T) {
 			name: "valid filepath mode",
 			cfg: FormatterConfig{
 				Formatters: []Formatter{
-					{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Extensions: []string{"go"}, Mode: FormatterModeFilepath},
+					{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Mode: FormatterModeFilepath},
 				},
 			},
 		},
@@ -114,16 +105,16 @@ func TestFormatterValidate(t *testing.T) {
 func TestMergeFormatters(t *testing.T) {
 	global := &FormatterConfig{
 		Formatters: []Formatter{
-			{Name: "gofumpt", Flake: "nixpkgs#gofumpt", Extensions: []string{"go"}},
-			{Name: "prettier", Flake: "nixpkgs#prettier", Extensions: []string{"js"}},
-			{Name: "nixfmt", Flake: "nixpkgs#nixfmt", Extensions: []string{"nix"}},
+			{Name: "gofumpt", Flake: "nixpkgs#gofumpt"},
+			{Name: "prettier", Flake: "nixpkgs#prettier"},
+			{Name: "nixfmt", Flake: "nixpkgs#nixfmt"},
 		},
 	}
 
 	t.Run("local overrides global", func(t *testing.T) {
 		local := &FormatterConfig{
 			Formatters: []Formatter{
-				{Name: "gofumpt", Path: "/custom/gofumpt", Extensions: []string{"go"}},
+				{Name: "gofumpt", Path: "/custom/gofumpt"},
 			},
 		}
 
@@ -168,7 +159,7 @@ func TestMergeFormatters(t *testing.T) {
 	t.Run("local adds new formatter", func(t *testing.T) {
 		local := &FormatterConfig{
 			Formatters: []Formatter{
-				{Name: "shfmt", Path: "/usr/bin/shfmt", Extensions: []string{"sh"}},
+				{Name: "shfmt", Path: "/usr/bin/shfmt"},
 			},
 		}
 

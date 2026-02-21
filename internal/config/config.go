@@ -20,9 +20,6 @@ type LSP struct {
 	Name         string              `toml:"name"`
 	Flake        string              `toml:"flake"`
 	Binary       string              `toml:"binary,omitempty"`
-	Extensions   []string            `toml:"extensions"`
-	Patterns     []string            `toml:"patterns"`
-	LanguageIDs  []string            `toml:"language_ids"`
 	Args         []string            `toml:"args"`
 	Env          map[string]string   `toml:"env,omitempty"`
 	InitOptions  map[string]any      `toml:"init_options,omitempty"`
@@ -126,10 +123,6 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("lsp[%d]: duplicate name %q", i, lsp.Name)
 		}
 		names[lsp.Name] = true
-
-		if len(lsp.Extensions) == 0 && len(lsp.Patterns) == 0 && len(lsp.LanguageIDs) == 0 {
-			return fmt.Errorf("lsp[%d] (%s): at least one of extensions, patterns, or language_ids is required", i, lsp.Name)
-		}
 
 		// Validate environment variable names
 		for k := range lsp.Env {

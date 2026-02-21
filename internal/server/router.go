@@ -18,11 +18,10 @@ type Router struct {
 func NewRouter(cfg *config.Config) (*Router, error) {
 	matchers := filematch.NewMatcherSet()
 
-	for _, l := range cfg.LSPs {
-		if err := matchers.Add(l.Name, l.Extensions, l.Patterns, l.LanguageIDs); err != nil {
-			return nil, err
-		}
-	}
+	// TODO(task-6): Rewrite to accept []*filetype.Config for routing.
+	// Fields were removed from config.LSP; routing now lives in filetype configs.
+
+	_ = cfg // suppress unused warning until full rewrite
 
 	return &Router{
 		matchers:    matchers,

@@ -24,8 +24,6 @@ type Formatter struct {
 	Flake      string            `toml:"flake"`
 	Binary     string            `toml:"binary,omitempty"`
 	Path       string            `toml:"path"`
-	Extensions []string          `toml:"extensions"`
-	Patterns   []string          `toml:"patterns"`
 	Args       []string          `toml:"args"`
 	Env        map[string]string `toml:"env"`
 	Mode       FormatterMode     `toml:"mode"`
@@ -124,10 +122,6 @@ func (cfg *FormatterConfig) Validate() error {
 		}
 		if f.Flake != "" && f.Path != "" {
 			return fmt.Errorf("formatter[%d] (%s): flake and path are mutually exclusive", i, f.Name)
-		}
-
-		if len(f.Extensions) == 0 && len(f.Patterns) == 0 {
-			return fmt.Errorf("formatter[%d] (%s): at least one of extensions or patterns is required", i, f.Name)
 		}
 
 		if f.Mode != "" && f.Mode != FormatterModeStdin && f.Mode != FormatterModeFilepath {

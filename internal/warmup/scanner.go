@@ -43,14 +43,9 @@ func (s *Scanner) ScanDirectories(dirs []string) ScanResult {
 		return result
 	}
 
+	// TODO(task-6): Rewrite to use filetype configs for matching.
+	// Fields were removed from config.LSP; routing now lives in filetype configs.
 	matchers := make(map[string]*filematch.Matcher, total)
-	for _, l := range s.cfg.LSPs {
-		m, err := filematch.New(l.Extensions, l.Patterns, nil)
-		if err != nil {
-			continue
-		}
-		matchers[l.Name] = m
-	}
 
 	fileCount := 0
 	for _, dir := range dirs {

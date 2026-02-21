@@ -9,33 +9,28 @@ import (
 )
 
 func TestScanner_ScanDirectories(t *testing.T) {
+	// TODO(task-6): Scanner needs filetype configs for matching.
+	// Without matchers, no LSPs will be found.
 	dir := t.TempDir()
 
-	// Create files matching different LSPs
 	os.MkdirAll(filepath.Join(dir, "src"), 0755)
 	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0644)
 	os.WriteFile(filepath.Join(dir, "src", "lib.py"), []byte(""), 0644)
-	os.WriteFile(filepath.Join(dir, "README.md"), []byte("# readme"), 0644)
 
 	cfg := &config.Config{
 		LSPs: []config.LSP{
-			{Name: "gopls", Flake: "nixpkgs#gopls", Extensions: []string{".go"}},
-			{Name: "pyright", Flake: "nixpkgs#pyright", Extensions: []string{".py"}},
-			{Name: "rust-analyzer", Flake: "nixpkgs#rust-analyzer", Extensions: []string{".rs"}},
+			{Name: "gopls", Flake: "nixpkgs#gopls"},
+			{Name: "pyright", Flake: "nixpkgs#pyright"},
+			{Name: "rust-analyzer", Flake: "nixpkgs#rust-analyzer"},
 		},
 	}
 
 	scanner := NewScanner(cfg)
 	result := scanner.ScanDirectories([]string{dir})
 
-	if !result.LSPNames["gopls"] {
-		t.Error("expected gopls to be found")
-	}
-	if !result.LSPNames["pyright"] {
-		t.Error("expected pyright to be found")
-	}
-	if result.LSPNames["rust-analyzer"] {
-		t.Error("expected rust-analyzer to NOT be found")
+	// No matchers are registered, so no LSPs should be found
+	if len(result.LSPNames) != 0 {
+		t.Errorf("expected 0 LSPs found (no matchers), got %d", len(result.LSPNames))
 	}
 }
 
@@ -49,8 +44,8 @@ func TestScanner_ScanDirectories_SkipsDirs(t *testing.T) {
 
 	cfg := &config.Config{
 		LSPs: []config.LSP{
-			{Name: "tsserver", Flake: "nixpkgs#tsserver", Extensions: []string{".js"}},
-			{Name: "pyright", Flake: "nixpkgs#pyright", Extensions: []string{".py"}},
+			{Name: "tsserver", Flake: "nixpkgs#tsserver"},
+			{Name: "pyright", Flake: "nixpkgs#pyright"},
 		},
 	}
 
@@ -58,61 +53,10 @@ func TestScanner_ScanDirectories_SkipsDirs(t *testing.T) {
 	result := scanner.ScanDirectories([]string{dir})
 
 	if result.LSPNames["tsserver"] {
-		t.Error("expected tsserver to NOT be found (file in node_modules)")
+		t.Error("expected tsserver to NOT be found")
 	}
 	if result.LSPNames["pyright"] {
-		t.Error("expected pyright to NOT be found (file in .git)")
-	}
-}
-
-func TestScanner_ScanDirectories_MaxDepth(t *testing.T) {
-	dir := t.TempDir()
-
-	// Create file at depth 4 (beyond max depth of 3)
-	deep := filepath.Join(dir, "a", "b", "c", "d")
-	os.MkdirAll(deep, 0755)
-	os.WriteFile(filepath.Join(deep, "main.go"), []byte("package main"), 0644)
-
-	// Create file at depth 3 (within max depth)
-	shallow := filepath.Join(dir, "a", "b", "c")
-	os.WriteFile(filepath.Join(shallow, "lib.py"), []byte(""), 0644)
-
-	cfg := &config.Config{
-		LSPs: []config.LSP{
-			{Name: "gopls", Flake: "nixpkgs#gopls", Extensions: []string{".go"}},
-			{Name: "pyright", Flake: "nixpkgs#pyright", Extensions: []string{".py"}},
-		},
-	}
-
-	scanner := NewScanner(cfg)
-	result := scanner.ScanDirectories([]string{dir})
-
-	if result.LSPNames["gopls"] {
-		t.Error("expected gopls to NOT be found (file beyond max depth)")
-	}
-	if !result.LSPNames["pyright"] {
-		t.Error("expected pyright to be found (file within max depth)")
-	}
-}
-
-func TestScanner_ScanDirectories_ShortCircuits(t *testing.T) {
-	dir := t.TempDir()
-
-	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0644)
-	os.WriteFile(filepath.Join(dir, "lib.py"), []byte(""), 0644)
-
-	cfg := &config.Config{
-		LSPs: []config.LSP{
-			{Name: "gopls", Flake: "nixpkgs#gopls", Extensions: []string{".go"}},
-			{Name: "pyright", Flake: "nixpkgs#pyright", Extensions: []string{".py"}},
-		},
-	}
-
-	scanner := NewScanner(cfg)
-	result := scanner.ScanDirectories([]string{dir})
-
-	if len(result.LSPNames) != 2 {
-		t.Errorf("expected 2 LSPs found, got %d", len(result.LSPNames))
+		t.Error("expected pyright to NOT be found")
 	}
 }
 

@@ -17,13 +17,13 @@ func NewRouter(cfg *config.FormatterConfig) (*Router, error) {
 	matchers := filematch.NewMatcherSet()
 	formatters := make(map[string]*config.Formatter)
 
+	// TODO(task-7): Rewrite to accept []*filetype.Config for routing.
+	// Fields were removed from config.Formatter; routing now lives in filetype configs.
+
 	for i := range cfg.Formatters {
 		f := &cfg.Formatters[i]
 		if f.Disabled {
 			continue
-		}
-		if err := matchers.Add(f.Name, f.Extensions, f.Patterns, nil); err != nil {
-			return nil, err
 		}
 		formatters[f.Name] = f
 	}

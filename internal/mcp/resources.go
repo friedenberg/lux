@@ -64,10 +64,9 @@ func registerResources(
 ) {
 	cwd, _ := os.Getwd()
 
+	// TODO(task-6): Rewrite to use filetype configs for matching.
+	// Fields were removed from config.LSP; routing now lives in filetype configs.
 	matcher := filematch.NewMatcherSet()
-	for _, l := range cfg.LSPs {
-		matcher.Add(l.Name, l.Extensions, l.Patterns, l.LanguageIDs)
-	}
 
 	registry.RegisterResource(
 		protocol.Resource{
@@ -147,9 +146,8 @@ func readStatus(pool *subprocess.Pool, cfg *config.Config) (*protocol.ResourceRe
 		statusMap[s.Name] = s.State
 	}
 
+	// TODO(task-9): Populate extensions/languages from filetype configs.
 	var lsps []lspStatus
-	extSet := make(map[string]bool)
-	langSet := make(map[string]bool)
 
 	for _, l := range cfg.LSPs {
 		state := statusMap[l.Name]
@@ -157,35 +155,14 @@ func readStatus(pool *subprocess.Pool, cfg *config.Config) (*protocol.ResourceRe
 			state = "idle"
 		}
 		lsps = append(lsps, lspStatus{
-			Name:       l.Name,
-			Flake:      l.Flake,
-			Extensions: l.Extensions,
-			Patterns:   l.Patterns,
-			State:      state,
+			Name:  l.Name,
+			Flake: l.Flake,
+			State: state,
 		})
-
-		for _, ext := range l.Extensions {
-			extSet[ext] = true
-		}
-		for _, lang := range l.LanguageIDs {
-			langSet[lang] = true
-		}
 	}
-
-	var extensions, languages []string
-	for ext := range extSet {
-		extensions = append(extensions, ext)
-	}
-	for lang := range langSet {
-		languages = append(languages, lang)
-	}
-	sort.Strings(extensions)
-	sort.Strings(languages)
 
 	resp := statusResponse{
-		ConfiguredLSPs:      lsps,
-		SupportedExtensions: extensions,
-		SupportedLanguages:  languages,
+		ConfiguredLSPs: lsps,
 	}
 
 	data, err := json.MarshalIndent(resp, "", "  ")
@@ -213,22 +190,12 @@ type languageInfo struct {
 }
 
 func readLanguages(cfg *config.Config) (*protocol.ResourceReadResult, error) {
+	// TODO(task-9): Populate from filetype configs instead of LSP config fields.
 	resp := make(languagesResponse)
 
 	for _, l := range cfg.LSPs {
-		for _, langID := range l.LanguageIDs {
-			resp[langID] = languageInfo{
-				LSP:        l.Name,
-				Extensions: l.Extensions,
-				Patterns:   l.Patterns,
-			}
-		}
-		if len(l.LanguageIDs) == 0 && len(l.Extensions) > 0 {
-			resp[l.Name] = languageInfo{
-				LSP:        l.Name,
-				Extensions: l.Extensions,
-				Patterns:   l.Patterns,
-			}
+		resp[l.Name] = languageInfo{
+			LSP: l.Name,
 		}
 	}
 

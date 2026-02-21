@@ -109,12 +109,6 @@ func Bootstrap(ctx context.Context, flake, binarySpec, configPath string) error 
 	conn.Notify(lsp.MethodExit, nil)
 
 	name := inferName(flake)
-	extensions, languageIDs := inferFileTypes(initResult.Capabilities)
-
-	if len(extensions) == 0 && len(languageIDs) == 0 {
-		fmt.Println("Warning: Could not infer file types from capabilities")
-		fmt.Println("You will need to configure extensions or language_ids manually")
-	}
 
 	cache := &CachedCapabilities{
 		Flake:        flake,
@@ -132,11 +126,9 @@ func Bootstrap(ctx context.Context, flake, binarySpec, configPath string) error 
 	}
 
 	lspConfig := config.LSP{
-		Name:        name,
-		Flake:       flake,
-		Binary:      binarySpec,
-		Extensions:  extensions,
-		LanguageIDs: languageIDs,
+		Name:   name,
+		Flake:  flake,
+		Binary: binarySpec,
 	}
 
 	if err := config.AddLSPTo(configPath, lspConfig); err != nil {
@@ -145,14 +137,8 @@ func Bootstrap(ctx context.Context, flake, binarySpec, configPath string) error 
 
 	fmt.Printf("\nAdded LSP: %s\n", name)
 	fmt.Printf("  Flake: %s\n", flake)
-	if len(extensions) > 0 {
-		fmt.Printf("  Extensions: %v\n", extensions)
-	}
-	if len(languageIDs) > 0 {
-		fmt.Printf("  Languages: %v\n", languageIDs)
-	}
 	fmt.Printf("\nConfig saved to: %s\n", configPath)
-	fmt.Println("You can edit the config to adjust file type matching.")
+	fmt.Println("Configure file type matching in filetype/*.toml.")
 
 	return nil
 }
@@ -171,10 +157,6 @@ func inferName(flake string) string {
 	}
 
 	return flake
-}
-
-func inferFileTypes(caps lsp.ServerCapabilities) (extensions []string, languageIDs []string) {
-	return nil, nil
 }
 
 type CachedCapabilities struct {

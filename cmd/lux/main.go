@@ -80,15 +80,6 @@ var listCmd = &cobra.Command{
 			if lsp.Binary != "" {
 				fmt.Printf("  binary:     %s\n", lsp.Binary)
 			}
-			if len(lsp.Extensions) > 0 {
-				fmt.Printf("  extensions: %v\n", lsp.Extensions)
-			}
-			if len(lsp.Patterns) > 0 {
-				fmt.Printf("  patterns:   %v\n", lsp.Patterns)
-			}
-			if len(lsp.LanguageIDs) > 0 {
-				fmt.Printf("  languages:  %v\n", lsp.LanguageIDs)
-			}
 		}
 		return nil
 	},

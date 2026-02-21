@@ -21,13 +21,11 @@ func TestLSP_BinaryField_TOML(t *testing.T) {
 name = "test"
 flake = "nixpkgs#gopls"
 binary = "gopls"
-extensions = ["go"]
 `,
 			expected: LSP{
-				Name:       "test",
-				Flake:      "nixpkgs#gopls",
-				Binary:     "gopls",
-				Extensions: []string{"go"},
+				Name:   "test",
+				Flake:  "nixpkgs#gopls",
+				Binary: "gopls",
 			},
 		},
 		{
@@ -35,13 +33,11 @@ extensions = ["go"]
 			toml: `
 name = "test"
 flake = "nixpkgs#gopls"
-extensions = ["go"]
 `,
 			expected: LSP{
-				Name:       "test",
-				Flake:      "nixpkgs#gopls",
-				Binary:     "",
-				Extensions: []string{"go"},
+				Name:   "test",
+				Flake:  "nixpkgs#gopls",
+				Binary: "",
 			},
 		},
 		{
@@ -50,13 +46,11 @@ extensions = ["go"]
 name = "test"
 flake = "github:owner/repo"
 binary = "bin/custom-lsp"
-extensions = ["custom"]
 `,
 			expected: LSP{
-				Name:       "test",
-				Flake:      "github:owner/repo",
-				Binary:     "bin/custom-lsp",
-				Extensions: []string{"custom"},
+				Name:   "test",
+				Flake:  "github:owner/repo",
+				Binary: "bin/custom-lsp",
 			},
 		},
 	}
@@ -77,9 +71,6 @@ extensions = ["custom"]
 			if lsp.Binary != tt.expected.Binary {
 				t.Errorf("Binary: expected %q, got %q", tt.expected.Binary, lsp.Binary)
 			}
-			if len(lsp.Extensions) != len(tt.expected.Extensions) {
-				t.Errorf("Extensions length: expected %d, got %d", len(tt.expected.Extensions), len(lsp.Extensions))
-			}
 		})
 	}
 }
@@ -95,21 +86,18 @@ func TestConfig_BinaryField_SaveAndLoad(t *testing.T) {
 		Socket: "/tmp/test.sock",
 		LSPs: []LSP{
 			{
-				Name:       "gopls",
-				Flake:      "nixpkgs#gopls",
-				Binary:     "gopls",
-				Extensions: []string{"go"},
+				Name:   "gopls",
+				Flake:  "nixpkgs#gopls",
+				Binary: "gopls",
 			},
 			{
-				Name:       "custom",
-				Flake:      "github:owner/repo",
-				Binary:     "bin/custom-lsp",
-				Extensions: []string{"custom"},
+				Name:   "custom",
+				Flake:  "github:owner/repo",
+				Binary: "bin/custom-lsp",
 			},
 			{
-				Name:       "default",
-				Flake:      "nixpkgs#rust-analyzer",
-				Extensions: []string{"rs"},
+				Name:  "default",
+				Flake: "nixpkgs#rust-analyzer",
 			},
 		},
 	}
@@ -156,9 +144,8 @@ func TestConfig_BinaryOmitempty(t *testing.T) {
 	config := &Config{
 		LSPs: []LSP{
 			{
-				Name:       "test",
-				Flake:      "nixpkgs#gopls",
-				Extensions: []string{"go"},
+				Name:  "test",
+				Flake: "nixpkgs#gopls",
 			},
 		},
 	}
@@ -196,10 +183,9 @@ func TestAddLSP_WithBinary(t *testing.T) {
 	}
 
 	lsp := LSP{
-		Name:       "test-lsp",
-		Flake:      "nixpkgs#test",
-		Binary:     "custom-binary",
-		Extensions: []string{"test"},
+		Name:   "test-lsp",
+		Flake:  "nixpkgs#test",
+		Binary: "custom-binary",
 	}
 
 	if err := AddLSP(lsp); err != nil {
@@ -224,8 +210,6 @@ func TestLSP_SettingsField_TOML(t *testing.T) {
 	input := `
 name = "gopls"
 flake = "nixpkgs#gopls"
-extensions = ["go"]
-language_ids = ["go"]
 
 [settings]
   gofumpt = true
@@ -267,9 +251,8 @@ func TestLSP_SettingsValidation(t *testing.T) {
 	cfg := &Config{
 		LSPs: []LSP{
 			{
-				Name:       "test",
-				Flake:      "nixpkgs#test",
-				Extensions: []string{"go"},
+				Name:  "test",
+				Flake: "nixpkgs#test",
 				Settings: map[string]any{
 					"valid_key": "valid_value",
 					"nested": map[string]any{
@@ -308,9 +291,8 @@ func TestLSP_SettingsWireKey(t *testing.T) {
 
 func TestLSP_SettingsDeepMerge(t *testing.T) {
 	global := LSP{
-		Name:       "gopls",
-		Flake:      "nixpkgs#gopls",
-		Extensions: []string{"go"},
+		Name:  "gopls",
+		Flake: "nixpkgs#gopls",
 		Settings: map[string]any{
 			"gofumpt":     true,
 			"staticcheck": true,
@@ -322,14 +304,13 @@ func TestLSP_SettingsDeepMerge(t *testing.T) {
 	}
 
 	project := LSP{
-		Name:       "gopls",
-		Flake:      "nixpkgs#gopls",
-		Extensions: []string{"go"},
+		Name:  "gopls",
+		Flake: "nixpkgs#gopls",
 		Settings: map[string]any{
 			"staticcheck": false,
 			"analyses": map[string]any{
-				"shadow":  false,
-				"ST1000":  false,
+				"shadow": false,
+				"ST1000": false,
 			},
 		},
 	}
@@ -382,9 +363,8 @@ func TestAddLSP_UpdateWithBinary(t *testing.T) {
 	}
 
 	firstLSP := LSP{
-		Name:       "test-lsp",
-		Flake:      "nixpkgs#test",
-		Extensions: []string{"test"},
+		Name:  "test-lsp",
+		Flake: "nixpkgs#test",
 	}
 
 	if err := AddLSP(firstLSP); err != nil {
@@ -392,10 +372,9 @@ func TestAddLSP_UpdateWithBinary(t *testing.T) {
 	}
 
 	updatedLSP := LSP{
-		Name:       "test-lsp",
-		Flake:      "nixpkgs#test-v2",
-		Binary:     "custom-binary",
-		Extensions: []string{"test"},
+		Name:   "test-lsp",
+		Flake:  "nixpkgs#test-v2",
+		Binary: "custom-binary",
 	}
 
 	if err := AddLSP(updatedLSP); err != nil {
@@ -423,7 +402,6 @@ func TestLSP_ReadinessFields_TOML(t *testing.T) {
 	input := `
 name = "gopls"
 flake = "nixpkgs#gopls"
-extensions = ["go"]
 wait_for_ready = false
 ready_timeout = "5m"
 activity_timeout = "15s"
@@ -448,7 +426,6 @@ func TestLSP_ReadinessFields_Defaults(t *testing.T) {
 	input := `
 name = "gopls"
 flake = "nixpkgs#gopls"
-extensions = ["go"]
 `
 	var lsp LSP
 	if err := toml.Unmarshal([]byte(input), &lsp); err != nil {
@@ -474,7 +451,6 @@ func TestLSP_ReadinessFields_InvalidDuration(t *testing.T) {
 	input := `
 name = "gopls"
 flake = "nixpkgs#gopls"
-extensions = ["go"]
 ready_timeout = "not-a-duration"
 `
 	var lsp LSP
