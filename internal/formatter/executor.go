@@ -150,3 +150,47 @@ func FormatReader(ctx context.Context, f *config.Formatter, filePath string, rea
 	}
 	return Format(ctx, f, filePath, content, executor)
 }
+
+// FormatChain pipes content through formatters sequentially. The output of
+// formatter N becomes the input of formatter N+1. If any formatter fails, the
+// chain stops and the error is returned.
+func FormatChain(ctx context.Context, formatters []*config.Formatter, filePath string, content []byte, executor subprocess.Executor) (*Result, error) {
+	current := content
+	changed := false
+
+	for _, f := range formatters {
+		result, err := Format(ctx, f, filePath, current, executor)
+		if err != nil {
+			return nil, fmt.Errorf("chain formatter %s: %w", f.Name, err)
+		}
+		if result.Changed {
+			changed = true
+			current = []byte(result.Formatted)
+		}
+	}
+
+	return &Result{
+		Formatted: string(current),
+		Changed:   changed,
+	}, nil
+}
+
+// FormatFallback tries each formatter in order and returns the first successful
+// result. If all formatters fail, the last error is returned.
+func FormatFallback(ctx context.Context, formatters []*config.Formatter, filePath string, content []byte, executor subprocess.Executor) (*Result, error) {
+	var lastErr error
+
+	for _, f := range formatters {
+		result, err := Format(ctx, f, filePath, content, executor)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		return result, nil
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("all formatters failed, last error: %w", lastErr)
+	}
+	return &Result{Formatted: string(content), Changed: false}, nil
+}
