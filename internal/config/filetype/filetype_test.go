@@ -156,6 +156,95 @@ func TestValidate_EmptyLSP(t *testing.T) {
 	}
 }
 
+func TestMerge_ProjectReplacesGlobal(t *testing.T) {
+	global := []*Config{
+		{Name: "go", Extensions: []string{"go"}, LSP: "gopls", Formatters: []string{"golines"}},
+		{Name: "python", Extensions: []string{"py"}, LSP: "pyright"},
+	}
+	project := []*Config{
+		{Name: "go", Extensions: []string{"go"}, LSP: "gopls", Formatters: []string{"gofumpt"}, FormatterMode: "chain"},
+	}
+
+	merged := Merge(global, project)
+
+	if len(merged) != 2 {
+		t.Fatalf("expected 2 configs, got %d", len(merged))
+	}
+
+	// go.toml should be fully replaced by project version
+	goConfig := findByName(merged, "go")
+	if goConfig == nil {
+		t.Fatal("missing go config")
+	}
+	if len(goConfig.Formatters) != 1 || goConfig.Formatters[0] != "gofumpt" {
+		t.Errorf("formatters = %v, want [gofumpt]", goConfig.Formatters)
+	}
+	if goConfig.FormatterMode != "chain" {
+		t.Errorf("formatter_mode = %q, want %q", goConfig.FormatterMode, "chain")
+	}
+
+	// python.toml should be preserved from global
+	pyConfig := findByName(merged, "python")
+	if pyConfig == nil {
+		t.Fatal("missing python config")
+	}
+}
+
+func TestMerge_ProjectAddsNew(t *testing.T) {
+	global := []*Config{
+		{Name: "go", Extensions: []string{"go"}, LSP: "gopls"},
+	}
+	project := []*Config{
+		{Name: "rust", Extensions: []string{"rs"}, LSP: "rust-analyzer"},
+	}
+
+	merged := Merge(global, project)
+
+	if len(merged) != 2 {
+		t.Fatalf("expected 2 configs, got %d", len(merged))
+	}
+
+	goConfig := findByName(merged, "go")
+	if goConfig == nil {
+		t.Fatal("missing go config from global")
+	}
+	rustConfig := findByName(merged, "rust")
+	if rustConfig == nil {
+		t.Fatal("missing rust config from project")
+	}
+}
+
+func TestMerge_NilInputs(t *testing.T) {
+	// Both nil
+	merged := Merge(nil, nil)
+	if len(merged) != 0 {
+		t.Fatalf("expected 0 configs for nil/nil, got %d", len(merged))
+	}
+
+	// Global only
+	global := []*Config{{Name: "go", Extensions: []string{"go"}, LSP: "gopls"}}
+	merged = Merge(global, nil)
+	if len(merged) != 1 {
+		t.Fatalf("expected 1 config for global/nil, got %d", len(merged))
+	}
+
+	// Project only
+	project := []*Config{{Name: "rust", Extensions: []string{"rs"}, LSP: "rust-analyzer"}}
+	merged = Merge(nil, project)
+	if len(merged) != 1 {
+		t.Fatalf("expected 1 config for nil/project, got %d", len(merged))
+	}
+}
+
+func findByName(configs []*Config, name string) *Config {
+	for _, c := range configs {
+		if c.Name == name {
+			return c
+		}
+	}
+	return nil
+}
+
 func TestLoadDir_MultipleFiles(t *testing.T) {
 	dir := t.TempDir()
 

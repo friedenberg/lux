@@ -61,6 +61,33 @@ func LoadDir(dir string) ([]*Config, error) {
 	return configs, nil
 }
 
+func Merge(global, project []*Config) []*Config {
+	projectByName := make(map[string]*Config)
+	for _, p := range project {
+		projectByName[p.Name] = p
+	}
+
+	var merged []*Config
+	seen := make(map[string]bool)
+
+	for _, g := range global {
+		if p, ok := projectByName[g.Name]; ok {
+			merged = append(merged, p)
+		} else {
+			merged = append(merged, g)
+		}
+		seen[g.Name] = true
+	}
+
+	for _, p := range project {
+		if !seen[p.Name] {
+			merged = append(merged, p)
+		}
+	}
+
+	return merged
+}
+
 func Validate(configs []*Config, lsps, formatters map[string]bool) error {
 	seenExts := make(map[string]string)
 	seenLangs := make(map[string]string)
