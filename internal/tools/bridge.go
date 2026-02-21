@@ -311,19 +311,33 @@ func (b *Bridge) tryExternalFormat(ctx context.Context, uri lsp.DocumentURI) (*c
 		return nil, false
 	}
 
+	if match.LSPFormat == "prefer" {
+		return nil, false
+	}
+
 	content, err := b.readFile(uri)
 	if err != nil {
-		return command.TextErrorResult(fmt.Sprintf("reading file for formatting: %v", err)), true
+		return command.TextErrorResult(fmt.Sprintf("reading file: %v", err)), true
 	}
 
-	// TODO(task-8): Support chain/fallback modes with multiple formatters.
-	f := match.Formatters[0]
-	fmtResult, err := formatter.Format(ctx, f, filePath, []byte(content), b.executor)
+	var result *formatter.Result
+	switch match.Mode {
+	case "chain":
+		result, err = formatter.FormatChain(ctx, match.Formatters, filePath, []byte(content), b.executor)
+	case "fallback":
+		result, err = formatter.FormatFallback(ctx, match.Formatters, filePath, []byte(content), b.executor)
+	default:
+		return command.TextErrorResult(fmt.Sprintf("unknown formatter mode: %s", match.Mode)), true
+	}
+
 	if err != nil {
-		return command.TextErrorResult(fmt.Sprintf("external formatter %s failed: %v", f.Name, err)), true
+		if match.LSPFormat == "fallback" {
+			return nil, false
+		}
+		return command.TextErrorResult(fmt.Sprintf("formatter failed: %v", err)), true
 	}
 
-	if !fmtResult.Changed {
+	if !result.Changed {
 		return command.TextResult("No formatting changes needed"), true
 	}
 
@@ -333,7 +347,7 @@ func (b *Bridge) tryExternalFormat(ctx context.Context, uri lsp.DocumentURI) (*c
 			Start: lsp.Position{Line: 0, Character: 0},
 			End:   lsp.Position{Line: lines + 1, Character: 0},
 		},
-		NewText: fmtResult.Formatted,
+		NewText: result.Formatted,
 	}
 
 	text := formatTextEdits([]lsp.TextEdit{edit})

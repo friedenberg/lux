@@ -33,8 +33,13 @@ type Server struct {
 }
 
 func New(cfg *config.Config) (*Server, error) {
-	// TODO(task-9): Load filetype configs from config and pass them here.
-	router, err := NewRouter([]*filetype.Config{})
+	ftConfigs, err := filetype.LoadMerged()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not load filetype config: %v\n", err)
+		ftConfigs = []*filetype.Config{}
+	}
+
+	router, err := NewRouter(ftConfigs)
 	if err != nil {
 		return nil, fmt.Errorf("creating router: %w", err)
 	}
@@ -68,7 +73,6 @@ func New(cfg *config.Config) (*Server, error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not load formatter config: %v\n", err)
 	} else {
-		// TODO(task-9): Load filetype configs from config and pass them here.
 		fmtMap := make(map[string]*config.Formatter)
 		for i := range fmtCfg.Formatters {
 			f := &fmtCfg.Formatters[i]
@@ -77,7 +81,7 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 		}
 
-		fmtRouter, err := formatter.NewRouter(nil, fmtMap)
+		fmtRouter, err := formatter.NewRouter(ftConfigs, fmtMap)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not create formatter router: %v\n", err)
 		} else {

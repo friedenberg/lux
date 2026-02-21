@@ -58,11 +58,32 @@ func (h *Handler) handleInitialize(_ context.Context, msg *jsonrpc.Message) (*js
 		if err == nil {
 			// Successfully loaded project config, reload pool
 			if reloadErr := h.server.reloadPool(projectCfg); reloadErr == nil {
-				// Update router with new config
-				// TODO(task-9): Load filetype configs from project config.
-				newRouter, routerErr := NewRouter([]*filetype.Config{})
+				// Reload filetype configs with project overrides
+				ftConfigs, ftErr := filetype.LoadMerged()
+				if ftErr != nil {
+					fmt.Fprintf(os.Stderr, "warning: could not load filetype config: %v\n", ftErr)
+					ftConfigs = []*filetype.Config{}
+				}
+
+				newRouter, routerErr := NewRouter(ftConfigs)
 				if routerErr == nil {
 					h.server.router = newRouter
+				}
+
+				// Rebuild formatter router with new filetype configs
+				fmtCfg, fmtErr := config.LoadMergedFormatters()
+				if fmtErr == nil {
+					fmtMap := make(map[string]*config.Formatter)
+					for i := range fmtCfg.Formatters {
+						f := &fmtCfg.Formatters[i]
+						if !f.Disabled {
+							fmtMap[f.Name] = f
+						}
+					}
+					fmtRouter, fmtRouterErr := formatter.NewRouter(ftConfigs, fmtMap)
+					if fmtRouterErr == nil {
+						h.server.fmtRouter = fmtRouter
+					}
 				}
 			}
 		}
@@ -212,6 +233,10 @@ func (h *Handler) tryExternalFormat(ctx context.Context, msg *jsonrpc.Message) (
 		return nil, false
 	}
 
+	if match.LSPFormat == "prefer" {
+		return nil, false
+	}
+
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		resp, _ := jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InternalError,
@@ -219,12 +244,24 @@ func (h *Handler) tryExternalFormat(ctx context.Context, msg *jsonrpc.Message) (
 		return resp, true
 	}
 
-	// TODO(task-8): Support chain/fallback modes with multiple formatters.
-	f := match.Formatters[0]
-	result, err := formatter.Format(ctx, f, filePath, content, h.server.executor)
-	if err != nil {
+	var result *formatter.Result
+	switch match.Mode {
+	case "chain":
+		result, err = formatter.FormatChain(ctx, match.Formatters, filePath, content, h.server.executor)
+	case "fallback":
+		result, err = formatter.FormatFallback(ctx, match.Formatters, filePath, content, h.server.executor)
+	default:
 		resp, _ := jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InternalError,
-			fmt.Sprintf("external formatter %s failed: %v", f.Name, err), nil)
+			fmt.Sprintf("unknown formatter mode: %s", match.Mode), nil)
+		return resp, true
+	}
+
+	if err != nil {
+		if match.LSPFormat == "fallback" {
+			return nil, false
+		}
+		resp, _ := jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InternalError,
+			fmt.Sprintf("formatter failed: %v", err), nil)
 		return resp, true
 	}
 

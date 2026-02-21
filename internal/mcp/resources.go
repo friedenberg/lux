@@ -13,6 +13,7 @@ import (
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/protocol"
 	mcpserver "github.com/amarbel-llc/purse-first/libs/go-mcp/server"
 	"github.com/amarbel-llc/lux/internal/config"
+	"github.com/amarbel-llc/lux/internal/config/filetype"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/subprocess"
 	"github.com/amarbel-llc/lux/internal/tools"
@@ -60,13 +61,17 @@ func registerResources(
 	pool *subprocess.Pool,
 	bridge *tools.Bridge,
 	cfg *config.Config,
+	ftConfigs []*filetype.Config,
 	diagStore *DiagnosticsStore,
 ) {
 	cwd, _ := os.Getwd()
 
-	// TODO(task-6): Rewrite to use filetype configs for matching.
-	// Fields were removed from config.LSP; routing now lives in filetype configs.
 	matcher := filematch.NewMatcherSet()
+	for _, ft := range ftConfigs {
+		if ft.LSP != "" {
+			matcher.Add(ft.Name, ft.Extensions, ft.Patterns, ft.LanguageIDs)
+		}
+	}
 
 	registry.RegisterResource(
 		protocol.Resource{
@@ -76,7 +81,7 @@ func registerResources(
 			MimeType:    "application/json",
 		},
 		func(ctx context.Context, uri string) (*protocol.ResourceReadResult, error) {
-			return readStatus(pool, cfg)
+			return readStatus(pool, cfg, ftConfigs)
 		},
 	)
 
@@ -88,7 +93,7 @@ func registerResources(
 			MimeType:    "application/json",
 		},
 		func(ctx context.Context, uri string) (*protocol.ResourceReadResult, error) {
-			return readLanguages(cfg)
+			return readLanguages(ftConfigs)
 		},
 	)
 
@@ -139,14 +144,26 @@ type lspStatus struct {
 	State      string   `json:"state"`
 }
 
-func readStatus(pool *subprocess.Pool, cfg *config.Config) (*protocol.ResourceReadResult, error) {
+func readStatus(pool *subprocess.Pool, cfg *config.Config, ftConfigs []*filetype.Config) (*protocol.ResourceReadResult, error) {
 	statuses := pool.Status()
 	statusMap := make(map[string]string)
 	for _, s := range statuses {
 		statusMap[s.Name] = s.State
 	}
 
-	// TODO(task-9): Populate extensions/languages from filetype configs.
+	// Build lookup from LSP name to extensions/patterns from filetype configs
+	lspExts := make(map[string][]string)
+	lspPatterns := make(map[string][]string)
+	var allExts, allLangs []string
+	for _, ft := range ftConfigs {
+		if ft.LSP != "" {
+			lspExts[ft.LSP] = append(lspExts[ft.LSP], ft.Extensions...)
+			lspPatterns[ft.LSP] = append(lspPatterns[ft.LSP], ft.Patterns...)
+		}
+		allExts = append(allExts, ft.Extensions...)
+		allLangs = append(allLangs, ft.LanguageIDs...)
+	}
+
 	var lsps []lspStatus
 
 	for _, l := range cfg.LSPs {
@@ -155,14 +172,18 @@ func readStatus(pool *subprocess.Pool, cfg *config.Config) (*protocol.ResourceRe
 			state = "idle"
 		}
 		lsps = append(lsps, lspStatus{
-			Name:  l.Name,
-			Flake: l.Flake,
-			State: state,
+			Name:       l.Name,
+			Flake:      l.Flake,
+			Extensions: lspExts[l.Name],
+			Patterns:   lspPatterns[l.Name],
+			State:      state,
 		})
 	}
 
 	resp := statusResponse{
-		ConfiguredLSPs: lsps,
+		ConfiguredLSPs:      lsps,
+		SupportedExtensions: allExts,
+		SupportedLanguages:  allLangs,
 	}
 
 	data, err := json.MarshalIndent(resp, "", "  ")
@@ -189,13 +210,14 @@ type languageInfo struct {
 	Patterns   []string `json:"patterns,omitempty"`
 }
 
-func readLanguages(cfg *config.Config) (*protocol.ResourceReadResult, error) {
-	// TODO(task-9): Populate from filetype configs instead of LSP config fields.
+func readLanguages(ftConfigs []*filetype.Config) (*protocol.ResourceReadResult, error) {
 	resp := make(languagesResponse)
 
-	for _, l := range cfg.LSPs {
-		resp[l.Name] = languageInfo{
-			LSP: l.Name,
+	for _, ft := range ftConfigs {
+		resp[ft.Name] = languageInfo{
+			LSP:        ft.LSP,
+			Extensions: ft.Extensions,
+			Patterns:   ft.Patterns,
 		}
 	}
 
