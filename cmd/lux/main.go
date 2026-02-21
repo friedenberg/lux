@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
@@ -12,6 +14,7 @@ import (
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/transport"
 	"github.com/amarbel-llc/lux/internal/capabilities"
 	"github.com/amarbel-llc/lux/internal/config"
+	"github.com/amarbel-llc/lux/internal/config/filetype"
 	"github.com/amarbel-llc/lux/internal/control"
 	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/mcp"
@@ -62,25 +65,38 @@ var addCmd = &cobra.Command{
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List configured LSPs",
-	Long:  `List all LSPs configured in the Lux configuration file.`,
+	Short: "List configured filetypes and their routing",
+	Long:  `List all filetype configs showing extensions, LSP, formatters, and formatter mode.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
+		filetypes, err := filetype.LoadMerged()
 		if err != nil {
-			return fmt.Errorf("loading config: %w", err)
+			return fmt.Errorf("loading filetype configs: %w", err)
 		}
 
-		if len(cfg.LSPs) == 0 {
-			fmt.Println("No LSPs configured")
+		if len(filetypes) == 0 {
+			fmt.Println("No filetype configs found")
 			return nil
 		}
 
-		for _, lsp := range cfg.LSPs {
-			fmt.Printf("%-20s %s\n", lsp.Name, lsp.Flake)
-			if lsp.Binary != "" {
-				fmt.Printf("  binary:     %s\n", lsp.Binary)
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "Filetype\tExtensions\tLSP\tFormatters\tMode")
+		for _, ft := range filetypes {
+			exts := strings.Join(ft.Extensions, ", ")
+			lsp := ft.LSP
+			if lsp == "" {
+				lsp = "-"
 			}
+			fmts := strings.Join(ft.Formatters, ", ")
+			if fmts == "" {
+				fmts = "-"
+			}
+			mode := "-"
+			if len(ft.Formatters) > 0 {
+				mode = ft.EffectiveFormatterMode()
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", ft.Name, exts, lsp, fmts, mode)
 		}
+		w.Flush()
 		return nil
 	},
 }
@@ -316,6 +332,11 @@ var formatCmd = &cobra.Command{
 			return fmt.Errorf("resolving path: %w", err)
 		}
 
+		filetypes, err := filetype.LoadMerged()
+		if err != nil {
+			return fmt.Errorf("loading filetype configs: %w", err)
+		}
+
 		fmtCfg, err := config.LoadMergedFormatters()
 		if err != nil {
 			return fmt.Errorf("loading formatter config: %w", err)
@@ -325,7 +346,6 @@ var formatCmd = &cobra.Command{
 			return fmt.Errorf("invalid formatter config: %w", err)
 		}
 
-		// TODO(task-10): Load filetype configs from config and pass them here.
 		fmtMap := make(map[string]*config.Formatter)
 		for i := range fmtCfg.Formatters {
 			f := &fmtCfg.Formatters[i]
@@ -334,7 +354,7 @@ var formatCmd = &cobra.Command{
 			}
 		}
 
-		router, err := formatter.NewRouter(nil, fmtMap)
+		router, err := formatter.NewRouter(filetypes, fmtMap)
 		if err != nil {
 			return fmt.Errorf("creating formatter router: %w", err)
 		}
@@ -350,8 +370,16 @@ var formatCmd = &cobra.Command{
 		}
 
 		executor := subprocess.NewNixExecutor()
-		// TODO(task-10): Support chain/fallback modes with multiple formatters.
-		result, err := formatter.Format(cmd.Context(), match.Formatters[0], filePath, content, executor)
+
+		var result *formatter.Result
+		switch match.Mode {
+		case "chain":
+			result, err = formatter.FormatChain(cmd.Context(), match.Formatters, filePath, content, executor)
+		case "fallback":
+			result, err = formatter.FormatFallback(cmd.Context(), match.Formatters, filePath, content, executor)
+		default:
+			return fmt.Errorf("unknown formatter mode: %s", match.Mode)
+		}
 		if err != nil {
 			return err
 		}
