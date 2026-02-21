@@ -11,6 +11,7 @@ import (
 
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/jsonrpc"
 	"github.com/amarbel-llc/lux/internal/config"
+	"github.com/amarbel-llc/lux/internal/config/filetype"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/subprocess"
 )
@@ -138,7 +139,20 @@ func Bootstrap(ctx context.Context, flake, binarySpec, configPath string) error 
 	fmt.Printf("\nAdded LSP: %s\n", name)
 	fmt.Printf("  Flake: %s\n", flake)
 	fmt.Printf("\nConfig saved to: %s\n", configPath)
-	fmt.Println("Configure file type matching in filetype/*.toml.")
+
+	ftCfg := &filetype.Config{
+		Name: name,
+		LSP:  name,
+	}
+
+	created, err := filetype.SaveIfNotExists(ftCfg)
+	if err != nil {
+		fmt.Printf("Warning: could not create filetype config: %v\n", err)
+	} else if created {
+		fmt.Printf("Created filetype/%s.toml (add extensions or language_ids to enable routing)\n", name)
+	} else {
+		fmt.Printf("Filetype config filetype/%s.toml already exists\n", name)
+	}
 
 	return nil
 }

@@ -138,6 +138,43 @@ func (f *Formatter) EffectiveMode() FormatterMode {
 	return f.Mode
 }
 
+func AddFormatterTo(path string, f Formatter) error {
+	cfg, err := loadFormatterFile(path)
+	if err != nil {
+		return err
+	}
+
+	for i, existing := range cfg.Formatters {
+		if existing.Name == f.Name {
+			cfg.Formatters[i] = f
+			return saveFormatterFile(path, cfg)
+		}
+	}
+
+	cfg.Formatters = append(cfg.Formatters, f)
+	return saveFormatterFile(path, cfg)
+}
+
+func saveFormatterFile(path string, cfg *FormatterConfig) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating formatter config directory: %w", err)
+	}
+
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("creating formatter config file: %w", err)
+	}
+	defer f.Close()
+
+	encoder := toml.NewEncoder(f)
+	if err := encoder.Encode(cfg); err != nil {
+		return fmt.Errorf("encoding formatter config: %w", err)
+	}
+
+	return nil
+}
+
 func ExpandEnvVars(path string) string {
 	return os.ExpandEnv(path)
 }

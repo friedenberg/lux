@@ -143,6 +143,56 @@ func LoadMerged() ([]*Config, error) {
 	return Merge(global, local), nil
 }
 
+func Save(cfg *Config) error {
+	return SaveTo(GlobalDir(), cfg)
+}
+
+func SaveTo(dir string, cfg *Config) error {
+	if cfg.Name == "" {
+		return fmt.Errorf("filetype config name is required")
+	}
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating filetype directory: %w", err)
+	}
+
+	path := filepath.Join(dir, cfg.Name+".toml")
+
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("creating filetype config: %w", err)
+	}
+	defer f.Close()
+
+	encoder := toml.NewEncoder(f)
+	if err := encoder.Encode(cfg); err != nil {
+		return fmt.Errorf("encoding filetype config: %w", err)
+	}
+
+	return nil
+}
+
+func SaveIfNotExists(cfg *Config) (bool, error) {
+	return SaveIfNotExistsTo(GlobalDir(), cfg)
+}
+
+func SaveIfNotExistsTo(dir string, cfg *Config) (bool, error) {
+	if cfg.Name == "" {
+		return false, fmt.Errorf("filetype config name is required")
+	}
+
+	path := filepath.Join(dir, cfg.Name+".toml")
+	if _, err := os.Stat(path); err == nil {
+		return false, nil
+	}
+
+	if err := SaveTo(dir, cfg); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 func Validate(configs []*Config, lsps, formatters map[string]bool) error {
 	seenExts := make(map[string]string)
 	seenLangs := make(map[string]string)

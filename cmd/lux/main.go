@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 
@@ -51,16 +52,130 @@ var serveCmd = &cobra.Command{
 
 var addBinary string
 var addConfigPath string
+var addFiletype string
+var addExtensions []string
+var addLanguageIDs []string
+var addLSP string
+var addFormatters []string
+var addFormatterMode string
+var addFormatterName string
+var addFormatterFlake string
 
 var addCmd = &cobra.Command{
-	Use:   "add <flake>",
-	Short: "Add an LSP from a nix flake",
-	Long:  `Add a new LSP to the configuration by bootstrapping it to discover capabilities.`,
-	Args:  cobra.ExactArgs(1),
+	Use:   "add [flake]",
+	Short: "Add an LSP, formatter, or filetype config",
+	Long: `Add a new LSP, formatter, or filetype config.
+
+Without flags, bootstraps an LSP from a nix flake:
+  lux add nixpkgs#gopls
+
+With --filetype, creates a filetype config:
+  lux add --filetype go --extensions go --lsp gopls
+
+With --formatter, adds a formatter to formatters.toml:
+  lux add --formatter prettierd --flake nixpkgs#prettierd`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		flake := args[0]
-		return capabilities.Bootstrap(cmd.Context(), flake, addBinary, addConfigPath)
+		switch {
+		case addFiletype != "":
+			return addFiletypeConfig()
+		case addFormatterName != "":
+			return addFormatterConfig()
+		default:
+			if len(args) == 0 {
+				return fmt.Errorf("flake argument is required when not using --filetype or --formatter")
+			}
+			return capabilities.Bootstrap(cmd.Context(), args[0], addBinary, addConfigPath)
+		}
 	},
+}
+
+func addFiletypeConfig() error {
+	if len(addExtensions) == 0 && len(addLanguageIDs) == 0 {
+		return fmt.Errorf("at least one of --extensions or --language-ids is required for --filetype")
+	}
+
+	cfg := &filetype.Config{
+		Name:          addFiletype,
+		Extensions:    addExtensions,
+		LanguageIDs:   addLanguageIDs,
+		LSP:           addLSP,
+		Formatters:    addFormatters,
+		FormatterMode: addFormatterMode,
+	}
+
+	dir := filetype.GlobalDir()
+	if err := filetype.SaveTo(dir, cfg); err != nil {
+		return fmt.Errorf("saving filetype config: %w", err)
+	}
+
+	fmt.Printf("Wrote filetype/%s.toml\n", addFiletype)
+	return nil
+}
+
+func addFormatterConfig() error {
+	if addFormatterFlake == "" {
+		return fmt.Errorf("--flake is required for --formatter")
+	}
+
+	f := config.Formatter{
+		Name:  addFormatterName,
+		Flake: addFormatterFlake,
+	}
+
+	configPath := addConfigPath
+	if configPath == "" {
+		configPath = config.FormatterConfigPath()
+	}
+
+	if err := config.AddFormatterTo(configPath, f); err != nil {
+		return fmt.Errorf("saving formatter config: %w", err)
+	}
+
+	fmt.Printf("Added formatter %s to %s\n", addFormatterName, configPath)
+
+	if len(addExtensions) > 0 {
+		ftName := addFormatterName
+		if addFiletype != "" {
+			ftName = addFiletype
+		}
+
+		ftDir := filetype.GlobalDir()
+		ftPath := filepath.Join(ftDir, ftName+".toml")
+
+		var ftCfg filetype.Config
+		if data, err := os.ReadFile(ftPath); err == nil {
+			if _, err := toml.Decode(string(data), &ftCfg); err != nil {
+				return fmt.Errorf("parsing existing filetype config: %w", err)
+			}
+		}
+
+		ftCfg.Name = ftName
+		if len(ftCfg.Extensions) == 0 {
+			ftCfg.Extensions = addExtensions
+		}
+		if len(ftCfg.LanguageIDs) == 0 && len(addLanguageIDs) > 0 {
+			ftCfg.LanguageIDs = addLanguageIDs
+		}
+
+		found := false
+		for _, existing := range ftCfg.Formatters {
+			if existing == addFormatterName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			ftCfg.Formatters = append(ftCfg.Formatters, addFormatterName)
+		}
+
+		if err := filetype.SaveTo(ftDir, &ftCfg); err != nil {
+			return fmt.Errorf("saving filetype config: %w", err)
+		}
+		fmt.Printf("Updated filetype/%s.toml\n", ftName)
+	}
+
+	return nil
 }
 
 var listCmd = &cobra.Command{
@@ -443,6 +558,22 @@ func init() {
 		"Specify custom binary name or path within the flake (e.g., 'rust-analyzer' or 'bin/custom-lsp')")
 	addCmd.Flags().StringVar(&addConfigPath, "config-path", "",
 		"Write to a custom config file location instead of the default")
+	addCmd.Flags().StringVar(&addFiletype, "filetype", "",
+		"Create a filetype config with this name (e.g., --filetype go)")
+	addCmd.Flags().StringSliceVar(&addExtensions, "extensions", nil,
+		"File extensions for --filetype or --formatter (e.g., --extensions go,mod)")
+	addCmd.Flags().StringSliceVar(&addLanguageIDs, "language-ids", nil,
+		"Language IDs for --filetype (e.g., --language-ids go)")
+	addCmd.Flags().StringVar(&addLSP, "lsp", "",
+		"LSP name for --filetype (e.g., --lsp gopls)")
+	addCmd.Flags().StringSliceVar(&addFormatters, "formatters", nil,
+		"Formatter names for --filetype (e.g., --formatters goimports,gofumpt)")
+	addCmd.Flags().StringVar(&addFormatterMode, "formatter-mode", "",
+		"Formatter mode for --filetype: chain or fallback")
+	addCmd.Flags().StringVar(&addFormatterName, "formatter", "",
+		"Add a formatter with this name (e.g., --formatter prettierd)")
+	addCmd.Flags().StringVar(&addFormatterFlake, "flake", "",
+		"Nix flake for --formatter (e.g., --flake nixpkgs#prettierd)")
 	rootCmd.AddCommand(addCmd)
 
 	rootCmd.AddCommand(listCmd)
