@@ -21,6 +21,39 @@ type Config struct {
 	LSPFormat     string   `toml:"lsp_format"`
 }
 
+func GlobalDir() string {
+	dir := os.Getenv("XDG_CONFIG_HOME")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return filepath.Join(".", ".config", "lux", "filetype")
+		}
+		dir = filepath.Join(home, ".config")
+	}
+	return filepath.Join(dir, "lux", "filetype")
+}
+
+func LocalDir() string {
+	return filepath.Join(".lux", "filetype")
+}
+
+func (c *Config) EffectiveFormatterMode() string {
+	if c.FormatterMode == "" {
+		return "chain"
+	}
+	return c.FormatterMode
+}
+
+func (c *Config) EffectiveLSPFormat() string {
+	if c.LSPFormat != "" {
+		return c.LSPFormat
+	}
+	if len(c.Formatters) > 0 {
+		return "never"
+	}
+	return "prefer"
+}
+
 func LoadDir(dir string) ([]*Config, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -86,6 +119,28 @@ func Merge(global, project []*Config) []*Config {
 	}
 
 	return merged
+}
+
+func Load() ([]*Config, error) {
+	return LoadDir(GlobalDir())
+}
+
+func LoadLocal() ([]*Config, error) {
+	return LoadDir(LocalDir())
+}
+
+func LoadMerged() ([]*Config, error) {
+	global, err := Load()
+	if err != nil {
+		return nil, fmt.Errorf("loading global filetypes: %w", err)
+	}
+
+	local, err := LoadLocal()
+	if err != nil {
+		return nil, fmt.Errorf("loading local filetypes: %w", err)
+	}
+
+	return Merge(global, local), nil
 }
 
 func Validate(configs []*Config, lsps, formatters map[string]bool) error {

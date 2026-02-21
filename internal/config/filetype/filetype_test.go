@@ -245,6 +245,49 @@ func findByName(configs []*Config, name string) *Config {
 	return nil
 }
 
+func TestEffectiveFormatterMode(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+		want string
+	}{
+		{"empty defaults to chain", "", "chain"},
+		{"explicit chain", "chain", "chain"},
+		{"explicit fallback", "fallback", "fallback"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{FormatterMode: tt.mode}
+			if got := cfg.EffectiveFormatterMode(); got != tt.want {
+				t.Errorf("EffectiveFormatterMode() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEffectiveLSPFormat(t *testing.T) {
+	tests := []struct {
+		name       string
+		lspFormat  string
+		formatters []string
+		want       string
+	}{
+		{"explicit never", "never", []string{"fmt"}, "never"},
+		{"explicit fallback", "fallback", []string{"fmt"}, "fallback"},
+		{"explicit prefer", "prefer", nil, "prefer"},
+		{"empty with formatters defaults to never", "", []string{"fmt"}, "never"},
+		{"empty without formatters defaults to prefer", "", nil, "prefer"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{LSPFormat: tt.lspFormat, Formatters: tt.formatters}
+			if got := cfg.EffectiveLSPFormat(); got != tt.want {
+				t.Errorf("EffectiveLSPFormat() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadDir_MultipleFiles(t *testing.T) {
 	dir := t.TempDir()
 
