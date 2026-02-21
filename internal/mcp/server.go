@@ -10,6 +10,7 @@ import (
 	mcpserver "github.com/amarbel-llc/purse-first/libs/go-mcp/server"
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/transport"
 	"github.com/amarbel-llc/lux/internal/config"
+	"github.com/amarbel-llc/lux/internal/config/filetype"
 	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/server"
@@ -27,7 +28,8 @@ type Server struct {
 }
 
 func New(cfg *config.Config, t transport.Transport) (*Server, error) {
-	router, err := server.NewRouter(cfg)
+	// TODO(task-9): Load filetype configs from config and pass them here.
+	router, err := server.NewRouter([]*filetype.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("creating router: %w", err)
 	}

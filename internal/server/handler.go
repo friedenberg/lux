@@ -9,6 +9,7 @@ import (
 
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/jsonrpc"
 	"github.com/amarbel-llc/lux/internal/config"
+	"github.com/amarbel-llc/lux/internal/config/filetype"
 	"github.com/amarbel-llc/lux/internal/formatter"
 	"github.com/amarbel-llc/lux/internal/lsp"
 	"github.com/amarbel-llc/lux/internal/warmup"
@@ -58,7 +59,8 @@ func (h *Handler) handleInitialize(_ context.Context, msg *jsonrpc.Message) (*js
 			// Successfully loaded project config, reload pool
 			if reloadErr := h.server.reloadPool(projectCfg); reloadErr == nil {
 				// Update router with new config
-				newRouter, routerErr := NewRouter(projectCfg)
+				// TODO(task-9): Load filetype configs from project config.
+				newRouter, routerErr := NewRouter([]*filetype.Config{})
 				if routerErr == nil {
 					h.server.router = newRouter
 				}
