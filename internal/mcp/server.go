@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/amarbel-llc/purse-first/libs/go-mcp/command"
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/jsonrpc"
 	mcpserver "github.com/amarbel-llc/purse-first/libs/go-mcp/server"
 	"github.com/amarbel-llc/purse-first/libs/go-mcp/transport"
@@ -93,7 +94,10 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 	s.docMgr = NewDocumentManager(s.pool, router, bridge)
 	bridge.SetDocumentManager(s.docMgr)
 
-	app := tools.RegisterAll(bridge)
+	app := command.NewApp("lux", "MCP server exposing LSP capabilities as tools")
+	app.Version = "0.1.0"
+	app.MCPArgs = []string{"mcp", "stdio"}
+	tools.RegisterAll(app, bridge)
 
 	toolRegistry := mcpserver.NewToolRegistry()
 	app.RegisterMCPTools(toolRegistry)

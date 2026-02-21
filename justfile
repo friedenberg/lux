@@ -61,10 +61,6 @@ run-mcp-sse addr=":8080":
 run-mcp-http addr=":8081":
     go run ./cmd/lux mcp http --addr "{{addr}}"
 
-# Install MCP server to Claude Code config
-run-install:
-    nix run .#install-mcp
-
 # Clean build artifacts
 clean:
     rm -f lux

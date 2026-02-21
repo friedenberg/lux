@@ -5,47 +5,33 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/cobra"
-
 	"github.com/amarbel-llc/lux/internal/config"
 	"github.com/amarbel-llc/lux/internal/config/filetype"
 )
 
-var initDefault bool
-var initForce bool
+func runInit(useDefault, force bool) error {
+	configDir := config.ConfigDir()
+	filetypeDir := filetype.GlobalDir()
 
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize the lux config directory",
-	Long: `Create the lux config directory structure with empty or default configs.
+	if err := os.MkdirAll(filetypeDir, 0755); err != nil {
+		return fmt.Errorf("creating directory %s: %w", filetypeDir, err)
+	}
+	fmt.Printf("created %s/\n", filetypeDir)
 
-Without flags, creates empty lsps.toml, formatters.toml, and filetype/ directory.
-With --default, writes curated defaults for common languages.
-With --force, overwrites existing files.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		configDir := config.ConfigDir()
-		filetypeDir := filetype.GlobalDir()
+	var files map[string]string
+	if useDefault {
+		files = defaultConfigFiles(configDir, filetypeDir)
+	} else {
+		files = emptyConfigFiles(configDir)
+	}
 
-		if err := os.MkdirAll(filetypeDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", filetypeDir, err)
+	for path, content := range files {
+		if err := writeConfigFile(path, content, force); err != nil {
+			return err
 		}
-		fmt.Printf("created %s/\n", filetypeDir)
+	}
 
-		var files map[string]string
-		if initDefault {
-			files = defaultConfigFiles(configDir, filetypeDir)
-		} else {
-			files = emptyConfigFiles(configDir)
-		}
-
-		for path, content := range files {
-			if err := writeConfigFile(path, content, initForce); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	},
+	return nil
 }
 
 func writeConfigFile(path, content string, force bool) error {
@@ -78,8 +64,8 @@ func emptyConfigFiles(configDir string) map[string]string {
 
 func defaultConfigFiles(configDir, filetypeDir string) map[string]string {
 	return map[string]string{
-		filepath.Join(configDir, "lsps.toml"):       defaultLSPsConfig,
-		filepath.Join(configDir, "formatters.toml"): defaultFormattersConfig,
+		filepath.Join(configDir, "lsps.toml"):         defaultLSPsConfig,
+		filepath.Join(configDir, "formatters.toml"):   defaultFormattersConfig,
 		filepath.Join(filetypeDir, "go.toml"):         defaultFiletypeGo,
 		filepath.Join(filetypeDir, "python.toml"):     defaultFiletypePython,
 		filepath.Join(filetypeDir, "javascript.toml"): defaultFiletypeJavascript,
