@@ -306,8 +306,8 @@ func (b *Bridge) tryExternalFormat(ctx context.Context, uri lsp.DocumentURI) (*c
 	}
 
 	filePath := uri.Path()
-	f := b.fmtRouter.Match(filePath)
-	if f == nil {
+	match := b.fmtRouter.Match(filePath)
+	if match == nil {
 		return nil, false
 	}
 
@@ -316,6 +316,8 @@ func (b *Bridge) tryExternalFormat(ctx context.Context, uri lsp.DocumentURI) (*c
 		return command.TextErrorResult(fmt.Sprintf("reading file for formatting: %v", err)), true
 	}
 
+	// TODO(task-8): Support chain/fallback modes with multiple formatters.
+	f := match.Formatters[0]
 	fmtResult, err := formatter.Format(ctx, f, filePath, []byte(content), b.executor)
 	if err != nil {
 		return command.TextErrorResult(fmt.Sprintf("external formatter %s failed: %v", f.Name, err)), true

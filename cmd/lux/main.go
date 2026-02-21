@@ -325,13 +325,22 @@ var formatCmd = &cobra.Command{
 			return fmt.Errorf("invalid formatter config: %w", err)
 		}
 
-		router, err := formatter.NewRouter(fmtCfg)
+		// TODO(task-10): Load filetype configs from config and pass them here.
+		fmtMap := make(map[string]*config.Formatter)
+		for i := range fmtCfg.Formatters {
+			f := &fmtCfg.Formatters[i]
+			if !f.Disabled {
+				fmtMap[f.Name] = f
+			}
+		}
+
+		router, err := formatter.NewRouter(nil, fmtMap)
 		if err != nil {
 			return fmt.Errorf("creating formatter router: %w", err)
 		}
 
-		f := router.Match(filePath)
-		if f == nil {
+		match := router.Match(filePath)
+		if match == nil {
 			return fmt.Errorf("no formatter configured for %s", filePath)
 		}
 
@@ -341,7 +350,8 @@ var formatCmd = &cobra.Command{
 		}
 
 		executor := subprocess.NewNixExecutor()
-		result, err := formatter.Format(cmd.Context(), f, filePath, content, executor)
+		// TODO(task-10): Support chain/fallback modes with multiple formatters.
+		result, err := formatter.Format(cmd.Context(), match.Formatters[0], filePath, content, executor)
 		if err != nil {
 			return err
 		}

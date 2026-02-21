@@ -207,8 +207,8 @@ func (h *Handler) tryExternalFormat(ctx context.Context, msg *jsonrpc.Message) (
 	}
 
 	filePath := uri.Path()
-	f := h.server.fmtRouter.Match(filePath)
-	if f == nil {
+	match := h.server.fmtRouter.Match(filePath)
+	if match == nil {
 		return nil, false
 	}
 
@@ -219,6 +219,8 @@ func (h *Handler) tryExternalFormat(ctx context.Context, msg *jsonrpc.Message) (
 		return resp, true
 	}
 
+	// TODO(task-8): Support chain/fallback modes with multiple formatters.
+	f := match.Formatters[0]
 	result, err := formatter.Format(ctx, f, filePath, content, h.server.executor)
 	if err != nil {
 		resp, _ := jsonrpc.NewErrorResponse(*msg.ID, jsonrpc.InternalError,

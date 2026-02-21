@@ -61,7 +61,16 @@ func New(cfg *config.Config, t transport.Transport) (*Server, error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not load formatter config: %v\n", err)
 	} else {
-		fmtRouter, err = formatter.NewRouter(fmtCfg)
+		// TODO(task-9): Load filetype configs from config and pass them here.
+		fmtMap := make(map[string]*config.Formatter)
+		for i := range fmtCfg.Formatters {
+			f := &fmtCfg.Formatters[i]
+			if !f.Disabled {
+				fmtMap[f.Name] = f
+			}
+		}
+
+		fmtRouter, err = formatter.NewRouter(nil, fmtMap)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not create formatter router: %v\n", err)
 			fmtRouter = nil
